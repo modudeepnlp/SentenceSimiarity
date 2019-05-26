@@ -13,3 +13,11 @@ Train Acc : 54%
 Validation Acc : 63%
   
 Predict Acc : 
+
+2. MaLSTM
+
+Train Acc :
+
+Validation Acc :
+
+Predict Acc :
