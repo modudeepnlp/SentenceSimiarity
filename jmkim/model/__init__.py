@@ -1,1 +1,1 @@
-__all__ = ['model']
+__all__ = ['net', 'data']

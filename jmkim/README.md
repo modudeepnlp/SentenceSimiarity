@@ -6,7 +6,10 @@ NLP 스터디로 도전 중.
 
 Score
 
-Train Acc :  
+1. Linear [BaseLine]
+ 
+Train Acc : 54%
 
-
+Validation Acc : 63%
+  
 Predict Acc : 

@@ -1,130 +1,82 @@
-from time import time
 import pandas as pd
+import numpy as np
+import torch
+import pickle
+import torch.nn as nn
 
-import matplotlib
-
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
-from sklearn.model_selection import train_test_split
-
-import tensorflow as tf
-
-from tensorflow.python.keras.models import Model, Sequential
-from tensorflow.python.keras.layers import Input, Embedding, LSTM, GRU, Conv1D, Conv2D, GlobalMaxPool1D, Dense, Dropout
-
-from util import make_w2v_embeddings
-from util import split_and_zero_padding
-from util import ManDist
-
-# File paths
-TRAIN_CSV = './data_in/snli_1.0_train.txt'
-
-# Load training set
-train_df = pd.read_csv(TRAIN_CSV, sep='\t')
-for q in ['sentence1', 'sentence2']:
-    train_df[q + '_n'] = train_df[q]
-
-# Make word2vec embeddings
-embedding_dim = 300
-max_seq_length = 20
-use_w2v = True
-
-gold_label = {}
-gold_label['neutral'] = 0
-gold_label['contradiction'] = 1
-gold_label['entailment'] = 2
-
-train_df, embeddings = make_w2v_embeddings(train_df, embedding_dim=embedding_dim, empty_w2v=not use_w2v)
-
-# Split to train validation
-validation_size = int(len(train_df) * 0.1)
-training_size = len(train_df) - validation_size
-
-X = train_df[['sentence1_n', 'sentence2_n']]
-Y = train_df['gold_label'].apply(lambda x: gold_label[x] if x != '-' else None)
+from pathlib import Path
+from torch.utils.data import DataLoader
+from torch import optim
+from mecab import MeCab
+from gluonnlp.data import PadSequence
+from tqdm import tqdm
+from model.data import Corpus
+from model.net import Net
 
 
-X_train, X_validation, Y_train, Y_validation = train_test_split(X, Y, test_size=validation_size)
+def main():
+    train_path = Path.cwd() / 'data_in' / 'train.txt'
+    val_path = Path.cwd() / 'data_in' / 'val.txt'
+    vocab_path = Path.cwd() / 'data_in' / 'vocab.pkl'
 
-X_train = split_and_zero_padding(X_train, max_seq_length)
-X_validation = split_and_zero_padding(X_validation, max_seq_length)
+    with open(vocab_path, mode='rb') as io:
+        vocab = pickle.load(io)
 
-# Convert labels to their numpy representations
-Y_train = Y_train.values
-Y_validation = Y_validation.values
+    tokenizer = MeCab()
+    padder = PadSequence(length=70, pad_val=vocab.token_to_idx['<pad>'])
+    tr_ds = Corpus(train_path, vocab, tokenizer, padder)
+    tr_dl = DataLoader(tr_ds, batch_size=1024, shuffle=True, num_workers=1, drop_last=True)
+    val_ds = Corpus(val_path, vocab, tokenizer, padder)
+    val_dl = DataLoader(val_ds, batch_size=1024)
 
-# Make sure everything is ok
-assert X_train['left'].shape == X_train['right'].shape
-assert len(X_train['left']) == len(Y_train)
+    model = Net(vocab_len=len(vocab))
 
-# --
+    loss_fn = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# Model variables
-gpus = 1
-batch_size = 2048
-n_epoch = 50
-n_hidden = 50
+    for epoch in range(1):
+        model.train()
+        index = 0
+        acc = 0
+        for label, sen1, sen2 in tqdm(tr_dl, disable=True):
+            optimizer.zero_grad()
 
-# Define the shared model
-x = Sequential()
-x.add(Embedding(len(embeddings), embedding_dim,
-                weights=[embeddings], input_shape=(max_seq_length,), trainable=False))
-# CNN
-# x.add(Conv1D(250, kernel_size=5, activation='relu'))
-# x.add(GlobalMaxPool1D())
-# x.add(Dense(250, activation='relu'))
-# x.add(Dropout(0.3))
-# x.add(Dense(1, activation='sigmoid'))
-# LSTM
-x.add(LSTM(n_hidden))
+            pre_label = model(sen1, sen2)
 
-shared_model = x
+            loss = loss_fn(pre_label, label)
+            loss.backward()
+            optimizer.step()
 
-# The visible layer
-left_input = Input(shape=(max_seq_length,), dtype='int32')
-right_input = Input(shape=(max_seq_length,), dtype='int32')
+            pred_cls = pre_label.data.max(1)[1]
+            acc += pred_cls.eq(label.data).cpu().sum()
 
-# Pack it all up into a Manhattan Distance model
-malstm_distance = ManDist()([shared_model(left_input), shared_model(right_input)])
-model = Model(inputs=[left_input, right_input], outputs=[malstm_distance])
+            print("epoch: {}, index: {}, loss: {}".format((epoch + 1), index, loss.item()))
+            index += len(label)
 
-model.compile(loss='mean_squared_error', optimizer=tf.keras.optimizers.Adam(), metrics=['accuracy'])
-model.summary()
-shared_model.summary()
+        print('Accuracy : %d %%' % (
+                100 * acc / index))
 
-# Start trainings
-training_start_time = time()
-malstm_trained = model.fit([X_train['left'], X_train['right']], Y_train,
-                           batch_size=batch_size, epochs=n_epoch,
-                           validation_data=([X_validation['left'], X_validation['right']], Y_validation))
-training_end_time = time()
-print("Training time finished.\n%d epochs in %12.2f" % (n_epoch,
-                                                        training_end_time - training_start_time))
+    for epoch in range(1):
+        model.train()
+        index = 0
+        acc = 0
+        for label, sen1, sen2 in tqdm(val_dl, disable=True):
+            optimizer.zero_grad()
 
-model.save('./data_out/SiameseLSTM.h5')
+            pre_label = model(sen1, sen2)
 
-# Plot accuracy
-plt.subplot(211)
-plt.plot(malstm_trained.history['acc'])
-plt.plot(malstm_trained.history['val_acc'])
-plt.title('Model Accuracy')
-plt.ylabel('Accuracy')
-plt.xlabel('Epoch')
-plt.legend(['Train', 'Validation'], loc='upper left')
+            loss = loss_fn(pre_label, label)
+            loss.backward()
+            optimizer.step()
 
-# Plot loss
-plt.subplot(212)
-plt.plot(malstm_trained.history['loss'])
-plt.plot(malstm_trained.history['val_loss'])
-plt.title('Model Loss')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Train', 'Validation'], loc='upper right')
+            pred_cls = pre_label.data.max(1)[1]
+            acc += pred_cls.eq(label.data).cpu().sum()
 
-plt.tight_layout(h_pad=1.0)
-plt.savefig('./data_out/history-graph.png')
+            print("epoch: {}, index: {}, loss: {}".format((epoch + 1), index, loss.item()))
+            index += len(label)
 
-print(str(malstm_trained.history['val_acc'][-1])[:6] +
-      "(max: " + str(max(malstm_trained.history['val_acc']))[:6] + ")")
-print("Done.")
+        print('Accuracy : %d %%' % (
+                100 * acc / index))
+
+if __name__ == "__main__":
+    main()
