@@ -1,0 +1,12 @@
+{
+  "filepath": {"tr": "data/naver_movie_corpus_kr/train.txt",
+               "val": "data/naver_movie_corpus_kr/val.txt",
+               "tst": "data/naver_movie_corpus_kr/test.txt",
+               "vocab": "data/naver_movie_corpus_kr/naver_movie_vocab.pkl",
+               "ckpt": "checkpoint/ckpt.tar"},
+  "model": {"num_classes":  2},
+  "padder": {"length" : 70},
+  "training": {"epochs": 10,
+               "batch_size": 128,
+               "learning_rate": 1e-3}
+}
