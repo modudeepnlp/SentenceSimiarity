@@ -28,8 +28,20 @@
 			+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
 				+ f(xi, q) = <W1*xi , W2*q>  (<> - dot product symbol)
 			+ additive attention - (비교) 성능 좋음
-				+ f(xi, q) = WT * σ(W1*xi + W2*q)
-		+ 
+				+ f(xi, q) = wT*σ(W1*xi + W2*q)
+		+ additive self attention 이므로 f(xi, xj), attention을 2가지 타입으로 정의
+			+ 1. token2token (self 로 token 끼리 interaction)
+				+f(xi, xj) = WT * σ(W1*xi + W2*xj + b1) + b2
+			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
+				+f(xi) =  WT * σ(W1*xi + b1) + b
+				+수식이 이해안됨
+				
+			+여기서 중요한 포인트, 다차원 관점에서 보자. 
+			+기존 additive attention 은 wT 로 소문자인 벡터
+			+논문 additive attention 은 WT 로 대문자인 매트릭스
+			+값이 여러개가 나온다. 그 중 제일 best 인 것을 사용, 즉 다차원 관점에서 제일 좋은것을 사용
+			
+			
 
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
 	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
