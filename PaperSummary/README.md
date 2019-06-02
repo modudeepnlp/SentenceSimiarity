@@ -23,13 +23,13 @@
 	+ https://arxiv.org/pdf/1709.04696.pdf
 	+ Summary
 		+ Attention 역사와 설명을 intro 에서 해줌
-		+ premise = q, source = x
-		+ multiply attention 과 additive attention 을 수식으로 설명 (이 논문은 additive attention 사용)
-			+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
-				+ f(xi, q) = <W1·xi, W2·q>  (<> - dot product symbol)
-			+ additive attention - (비교) 성능 좋음
-				+ f(xi, q) = wT·σ(W1·xi + W2·q)
-		+ additive self attention 이므로 f(xi, xj), 2가지 타입 
+			+ premise = q, source = x
+			+ multiply attention 과 additive attention 을 수식으로 설명 
+				+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
+					+ f(xi, q) = <W1·xi, W2·q>  (<> - dot product symbol)
+				+ additive attention - (비교) 성능 좋음
+					+ f(xi, q) = wT·σ(W1·xi + W2·q)
+		+ 이 논문은 additive self attention 이므로 f(xi, xj), 2가지 타입 
 			+ 1. token2token (self 로 token 끼리 interaction)
 				+ f(xi, xj) = WT·σ(W1·xi + W2·xj + b1) + b2
 			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
