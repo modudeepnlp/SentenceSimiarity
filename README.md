@@ -28,8 +28,3 @@
 | :--------------- | :-------: | :------------: | :------: |
 | Baseline (Feed Forward)         |  -  |     -     |  -  |
 | MaLSTM           |  -  |     -     |  -  |
-
-* [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
-	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
-* [ ] Fine-Tuned LM-Pretrained Transformer
-	+ https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf

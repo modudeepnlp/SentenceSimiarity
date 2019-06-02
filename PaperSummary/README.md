@@ -1,17 +1,5 @@
-# Sentence Simliarity with NLP implementation
-+ 문장 유사도 관련된 모델에 대해 R&D 리포
-
-## Usage
-+ 유사도를 기반으로 다양한 분야에 활용이 가능합니다. 
-
-|      TASK        | X | Y | REF |
-| :--------------- | :-------: | :------------: | :------: |
-| Web Search       |  Search query | Web document|  Huang+ 13; Shen+ 14; Palangi+ 16 |
-| Entity linkin    |  Entity mention and context |  Entity and its corresponding page | Gao+ 14b |
-| Online recommendation  |  Doc in reading |     Interesting things / other docs|  Gao+ 14b  |
-| Image captioning       |  Image |     Text     |  Fang+ 15 |
-| Machine translation    |  Sentence in language A |     Translations in language B |  Gao+ 14a |
-| Question answering     |  Question  |     Answer     |  Yih+ 15  |
+# Paper Skim Sentence Simliarity with NLP implementation
++ 간단한 페이퍼 리뷰 및 업로드
 
 ## Target Dataset
 
@@ -21,13 +9,16 @@
 + [QuestionPair, Song](https://github.com/songys/Question_pair)
 + ETC
 
-### SNLI
-+ Hyper-parameter was arbitrarily selected.
+### Paper List
+* [ ] 448D Densely Interactive Inference Network (DIIN)
+	+ https://arxiv.org/pdf/1709.04348.pdf
+    + Summary
+        + ICLR 논문으로 Model적인 의미보다는 타 Paper에 의해 검증 및 비교가 체계적임
+        + Interactive Inference Netwrok (IIN)을 활용하여 semantic features를 좀 더 잘 뽑아 성능을 높혔다.
+        + Input으로는 Glove, Char-feature (1D-Conv), Pos-tagger, Exact Matching (EM)을 활용
+        + Embedding - Encoding - Interaction - Feature Extraction - Output Layer로 구성
+        + 각 기능들 (Feature, 모델 구조 변형 등)에 대한 정확도 등에 설명이 잘 되있음
 
-|                  | Train ACC | Validation ACC | Test ACC |
-| :--------------- | :-------: | :------------: | :------: |
-| Baseline (Feed Forward)         |  -  |     -     |  -  |
-| MaLSTM           |  -  |     -     |  -  |
 
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
 	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
