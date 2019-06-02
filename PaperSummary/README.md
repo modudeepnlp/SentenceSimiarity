@@ -26,14 +26,14 @@
 		+ premise = q, source = x
 		+ multiply attention 과 additive attention 을 수식으로 설명 (이 논문은 additive attention 사용)
 			+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
-				+ f(xi, q) = <W1 * xi, W2 * q>  (<> - dot product symbol)
+				+ f(xi, q) = <W1·xi, W2·q>  (<> - dot product symbol)
 			+ additive attention - (비교) 성능 좋음
-				+ f(xi, q) = wT*σ(W1 * xi + W2 * q)
+				+ f(xi, q) = wT·σ(W1·xi + W2·q)
 		+ additive self attention 이므로 f(xi, xj), attention을 2가지 타입으로 정의
 			+ 1. token2token (self 로 token 끼리 interaction)
-				+ f(xi, xj) = WT * σ(W1*xi + W2*xj + b1) + b2
+				+ f(xi, xj) = WT·σ(W1·xi + W2·xj + b1) + b2
 			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
-				+ f(xi) =  WT * σ(W1*xi + b1) + b
+				+ f(xi) =  WT·σ(W1·xi + b1) + b
 				+ 수식이 이해안됨	
 			+ 여기서 중요한 포인트, 다차원 관점에서 보자. 
 			+ 기존 additive attention 은 wT 로 소문자인 벡터
@@ -44,7 +44,7 @@
 			+ 1. reduce parameter
 			+ 2. masked 를 씌어 interaction이 asymmetric 하게 
 			+ Mask를 씌어 일시적 ordering 정보를 생성 (3가지 타입, fw,bw,disable)
-			+ f(xi, xj) = c·tanh(W1*hi + W2*hj + b1/c)+ M*1. (1 = all-one vector)
+			+ f(xi, xj) = c·tanh(W1·hi + W2·hj + b1/c)+ M·1. (1 = all-one vector)
 		+ Fusion
 			+ F 로 비율을 구하여 원본과 mask additive self attention 을 섞음
 			+ fusion output이 DiSA 의 output
