@@ -33,8 +33,7 @@
 			+ token2token (self 로 token 끼리 interaction)
 				+ f(xi, xj) = WT·σ(W1·xi + W2·xj + b1) + b2
 			+ sorce2token (self 로 token 과 sequence 가 interaction)
-				+ f(xi) =  WT·σ(W1·xi + b1) + b
-				+ 수식이 이해안됨	
+				+ f(xi) =  WT·σ(W1·xi + b1) + b (수식이 이해안됨)	
 			+ 여기서 중요한 포인트, 다차원 관점에서 보자. 
 			+ 기존 additive attention 은 wT 로 소문자인 벡터
 			+ 논문 additive attention 은 WT 로 대문자인 매트릭스
