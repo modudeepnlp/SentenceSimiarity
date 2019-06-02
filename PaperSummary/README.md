@@ -31,10 +31,10 @@
 				+ f(xi, q) = wT*σ(W1*xi + W2*q)
 		+ additive self attention 이므로 f(xi, xj), attention을 2가지 타입으로 정의
 			+ 1. token2token (self 로 token 끼리 interaction)
-				+f(xi, xj) = WT * σ(W1*xi + W2*xj + b1) + b2
+				+ f(xi, xj) = WT * σ(W1*xi + W2*xj + b1) + b2
 			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
-				+f(xi) =  WT * σ(W1*xi + b1) + b
-				+수식이 이해안됨
+				+ f(xi) =  WT * σ(W1*xi + b1) + b
+				+ 수식이 이해안됨
 				
 			+여기서 중요한 포인트, 다차원 관점에서 보자. 
 			+기존 additive attention 은 wT 로 소문자인 벡터
