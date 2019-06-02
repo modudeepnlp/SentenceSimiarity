@@ -26,8 +26,9 @@
 		+ premise = q, source = x
 		+ multiply attention 과 additive attention 을 수식으로 설명 (이 논문은 additive attention 사용)
 			+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
-				f(xi, q) = WT σW(1)xi + W(2)q
+				+ f(xi, q) = <W1*xi , W2*q>  (<> - dot product symbol)
 			+ additive attention - (비교) 성능 좋음
+				+ f(xi, q) = WT * σ(W1*xi + W2*q)
 		+ 
 
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
