@@ -3,6 +3,7 @@
 """
 from vocab import strip_string
 import numpy as np
+import pandas as pd
 
 # label index 정의
 label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
@@ -29,29 +30,28 @@ def load_data(file, vocab):
     sentence1 = []
     sentence2 = []
 
-    index = 0
-    with open(file, "r") as f:
-        for line in f:
-            if 0 < index:
-                parts = line.strip().split("\t")
-                if parts[0] != "-":
-                    gold_label.append(label_dict[parts[0]])
+    dataset = pd.read_csv(file, sep="\t")
+    for i, row in dataset.iterrows():
+        if i != 0 and i % 1000 == 0:
+                print("{0} : {1} sentences".format(file, i))
+        if row['gold_label'] == "-" or pd.isnull(row['sentence1']) or pd.isnull(row['sentence2']):
+            continue
 
-                    line1 = []
-                    for token in strip_string(parts[5]).split():
-                        line1.append(vocab[token])
-                    while len(line1) < 82:
-                        line1.append(1) # <pad>
-                    sentence1.append(line1)
+        gold_label.append(label_dict[row['gold_label']])
 
-                    line2 = []
-                    for token in strip_string(parts[6]).split():
-                        line2.append(vocab[token])
-                    while len(line2) < 63:
-                        line2.append(1) # <pad>
-                    sentence2.append(line2)
+        line1 = []
+        for token in strip_string(row['sentence1']).split():
+            line1.append(vocab[token])
+        while len(line1) < 82:
+            line1.append(1) # <pad>
+        sentence1.append(line1)
 
-            index += 1
+        line2 = []
+        for token in strip_string(row['sentence2']).split():
+            line2.append(vocab[token])
+        while len(line2) < 63:
+            line2.append(1) # <pad>
+        sentence2.append(line2)
     
     return gold_label, sentence1, sentence2
 
