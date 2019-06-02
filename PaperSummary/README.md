@@ -29,7 +29,7 @@
 				+ f(xi, q) = <W1·xi, W2·q>  (<> - dot product symbol)
 			+ additive attention - (비교) 성능 좋음
 				+ f(xi, q) = wT·σ(W1·xi + W2·q)
-		+ additive self attention 이므로 f(xi, xj), attention을 2가지 타입으로 정의
+		+ additive self attention 이므로 f(xi, xj), 2가지 타입 
 			+ 1. token2token (self 로 token 끼리 interaction)
 				+ f(xi, xj) = WT·σ(W1·xi + W2·xj + b1) + b2
 			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
