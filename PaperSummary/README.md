@@ -19,6 +19,8 @@
         + Embedding - Encoding - Interaction - Feature Extraction - Output Layer로 구성
         + 각 기능들 (Feature, 모델 구조 변형 등)에 대한 정확도 등에 설명이 잘 되있음
 
+* [ ] DiSAN: Directional Self-Attention Network for RNN/CNN-Free Language Understanding
+
 
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
 	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
