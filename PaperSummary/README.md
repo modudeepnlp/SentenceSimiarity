@@ -20,7 +20,15 @@
         + 각 기능들 (Feature, 모델 구조 변형 등)에 대한 정확도 등에 설명이 잘 되있음
 
 * [ ] DiSAN: Directional Self-Attention Network for RNN/CNN-Free Language Understanding
-
+	+ https://arxiv.org/pdf/1709.04696.pdf
+	+Summary
+		+ Attention 역사와 설명을 intro 에서 해줌
+		+ premise = q, source = x
+		+ multiply attention 과 additive attention 을 수식으로 설명 (이 논문은 additive attention 사용)
+			+ multiply attention - (비교) 메모리 효율성 좋음, 계산 효율 좋음
+				f(xi, q) = WT σW(1)xi + W(2)q
+			+ additive attention - (비교) 성능 좋음
+		+ 
 
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
 	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
