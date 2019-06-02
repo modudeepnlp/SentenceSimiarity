@@ -34,12 +34,26 @@
 				+ f(xi, xj) = WT * σ(W1*xi + W2*xj + b1) + b2
 			+ 2. sorce2token (self 로 token 과 sequence 가 interaction)
 				+ f(xi) =  WT * σ(W1*xi + b1) + b
-				+ 수식이 이해안됨
-				
-			+여기서 중요한 포인트, 다차원 관점에서 보자. 
-			+기존 additive attention 은 wT 로 소문자인 벡터
-			+논문 additive attention 은 WT 로 대문자인 매트릭스
-			+값이 여러개가 나온다. 그 중 제일 best 인 것을 사용, 즉 다차원 관점에서 제일 좋은것을 사용
+				+ 수식이 이해안됨	
+			+ 여기서 중요한 포인트, 다차원 관점에서 보자. 
+			+ 기존 additive attention 은 wT 로 소문자인 벡터
+			+ 논문 additive attention 은 WT 로 대문자인 매트릭스
+			+ attention score 가 여러개, 그 중 제일 best 인 것을 사용, 즉 다차원 관점에서 제일 좋은것을 사용하자
+		+ (DiSA) Directional self-attention
+			+ additive attention 을 변형, 
+			+ 1. reduce parameter
+			+ 2. masked 를 씌어 interaction이 asymmetric 하게 
+			+ Mask를 씌어 일시적 ordering 정보를 생성 (3가지 타입, fw,bw,disable)
+			+ f(xi, xj) = c·tanh(W1*hi + W2*hj + b1/c)+ M*1. (1 = all-one vector)
+		+ Fusion
+			+ F 로 비율을 구하여 원본과 mask additive self attention 을 섞음
+			+ fusion output이 DiSA 의 output
+		+ (DiSAN) Directional Self-Attention Network
+			+ equation 17 을 fw
+			+ equation 18 을 bw 
+			+ fw, bw 을 concat 한 것을 source로 보고 sorce2token으로 output 구함
+		+ Remark 
+			+ 이 논문의 특이점, 다차원관점을 사용했다. 
 			
 			
 
