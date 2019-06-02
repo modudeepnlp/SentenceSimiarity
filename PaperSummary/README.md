@@ -21,7 +21,7 @@
 
 * [ ] DiSAN: Directional Self-Attention Network for RNN/CNN-Free Language Understanding
 	+ https://arxiv.org/pdf/1709.04696.pdf
-	+Summary
+	+ Summary
 		+ Attention 역사와 설명을 intro 에서 해줌
 		+ premise = q, source = x
 		+ multiply attention 과 additive attention 을 수식으로 설명 (이 논문은 additive attention 사용)
