@@ -41,8 +41,8 @@
 			+ attention score 가 여러개, 그 중 제일 best 인 것을 사용, 즉 다차원 관점에서 제일 좋은것을 사용하자
 		+ (DiSA) Directional self-attention
 			+ additive attention 을 변형, 
-			+ reason 1. reduce parameter
-			+ reason 2. masked 를 씌어 interaction이 asymmetric 하게 
+				+ reason 1. reduce parameter
+				+ reason 2. masked 를 씌어 interaction이 asymmetric 하게 
 			+ Mask를 씌어 일시적 ordering 정보를 생성 (3가지 타입, fw,bw,disable)
 			+ f(xi, xj) = c·tanh(W1·hi + W2·hj + b1/c)+ M·1. (1 = all-one vector)
 		+ Fusion
