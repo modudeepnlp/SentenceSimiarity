@@ -67,10 +67,10 @@
 			+ model the inferential relationship between two or more given sentences
 			+ In particular, given two sentences - the premise p and the hypothesis h
 		+ Natural Language Inference by Tree-Based Convolution and Heuristic Matching (Mou et al. (2016))
-			+ sentence embeddings are combined using a heuristic
 			+ linear offset of vectors can capture relationships between two words
 			+ but it has not been exploited in sentence-pair relation recognition.(Mikolov et al., 2013b),
 			+ Our study verifies that vector offset is useful in capturing generic sentence relationships
+			+ sentence embeddings are combined using a heuristic
 			+ m = [h1; h2; h1 − h2; h1 ◦ h2]  (concat, difference, product)
 			+ vector representations of individual sentences are combined to capture the relation between the p and h
 			+ As the dataset is large, we prefer O(1) matching operations because of efficiency concerns. 
