@@ -59,7 +59,7 @@
 	+ Summary
 		+ promise, hypothesis 둘다 BiLSTM 3 layer를 쌓아서 각 레이이어 출력을 concat 해서 embedding 값으로 사용 함
         	+ embedding 출력 u(promise 출력), v(hypothesis 출력)를 [u; v; |u-v|; u * v] 형태로 concat 함
-		* concat 한 출력을 linear-layer 3개를 사용해서 최종 출력을 만듬
+			* concat 한 출력을 linear-layer 3개를 사용해서 최종 출력을 만듬
         	+ 모델이 간단하고 구현하기 어렵지 않으면서도 나쁘지 않은 성능을 보여 줌
 	+ Summary2
 		+ intro
