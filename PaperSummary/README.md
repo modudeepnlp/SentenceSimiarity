@@ -84,14 +84,14 @@
 				+ element-wise difference, W0(h1−h2) = [W0, −W0][h1, h2]T
 			+ heuristic significantly improves the performance
 		+ Supervised Learning of Universal Sentence Representations from Natural Language Inference Data (Conneau et al. (2017))
-			+ max-pooling - (4 conv layers) representations of the sentences at different level of abstractions에서 강한거 추출
-			+ hierarchical convolutional network = blends different levels of abstraction.
 			+ hierarchical 장점 
 				+ (attentive 세심하게, 주의 깊게) 이전 레이어의 가중치를 받아 같은 동작을 다시 반복함으로써 attentive 해짐
 				+ concat 으로 계층마다 다른 관점들을 블랜딩 함으로써 표현이 주의깊은 추상화가 됨
+				+ representations of the sentences at different level of abstractions 을 max-pooling 으로 추출
+					+ 그러니까 max pooling 으로 인하여 level 마다 관점들이 두드러짐
 			+ fully connected layer 가 한개
 		+ iterative refinement architecture
-			+ 이전 LSTM 레이어의 information을 다음 레이어의 initialisation 함으로써 반복적 정제 아키텍쳐를 가진다고 함.
+			+ 이전 LSTM 레이어의 info을 다음 레이어의 initialisation 함으로써 반복적 정제 아키텍쳐를 가진다고 함.
 		+ 3-way softmax
 			+ 3-class
 		+ Max pooling is defined in the standard way of taking the highest value over each dimension of the hidden states = u
