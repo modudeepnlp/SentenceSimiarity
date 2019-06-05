@@ -61,7 +61,45 @@
         + embedding 출력 u(promise 출력), v(hypothesis 출력)를 [u; v; |u-v|; u * v] 형태로 concat 함
 		* concat 한 출력을 linear-layer 3개를 사용해서 최종 출력을 만듬
         + 모델이 간단하고 구현하기 어렵지 않으면서도 나쁘지 않은 성능을 보여 줌
-
+    + Summary2
+    	+ iterative refinement strategy (hierarchy of BiLSTM and max pooling)
+	+ model the inferential relationship between two or more given sentences
+	+ In particular, given two sentences - the premise p and the hypothesis h
+	+ building separate embeddings for the premises and the hypothesis and then combine those + extend BiLSTM
+	+ sentence embeddings are combined using a heuristic introduced by Mou et al. (2016), 
+		+ putting together the concatenation (u, v), 
+		+ absolute element-wise difference |u − v|,
+		+ and element-wise product u ∗ v
+	+ Natural Language Inference by Tree-Based Convolution and Heuristic Matching (Mou et al. (2016))
+		+ linear offset of vectors can capture relationships between two words
+		+ but it has not been exploited in sentence-pair relation recognition.(Mikolov et al., 2013b),
+		+ Our study verifies that vector offset is useful in capturing generic sentence relationships
+		+ m = [h1; h2; h1 − h2; h1 ◦ h2]  (concat, difference, product)
+		+ vector representations of individual sentences are combined to capture the relation between the premise and hypothesis
+		+ As the dataset is large, we prefer O(1) matching operations because of efficiency concerns. 
+		+ first one (concat) = 
+			+ the most standard procedure of the “Siamese” architectures, 
+			+ W[h1, h2], where W = [W1, W2]
+		+ latter two (difference, product) = 
+			+ certain measures of “similarity” or “closeness.”
+			+ special cases of concatenation
+			+ element-wise product, 용량관점에서 concat에 포함 (same)
+			+ element-wise difference, W0(h1−h2) = [W0, −W0][h1, h2]T
+		+ heuristic significantly improves the performance
+	+ Supervised Learning of Universal Sentence Representations from Natural Language Inference Data (by Conneau et al. (2017))
+		+ max-pooling - (4 convolutional layers) representations of the sentences at different level of abstractions에서 강한거 추출
+		+ hierarchical convolutional network = blends different levels of abstraction.
+		+ hierarchical 장점 
+			+ attentive network, 세심하게, 주의 깊게 봄. 이전 상태의 가중치를 받아 같은 동작을 다시 반복함으로써 attentive 해짐
+			+ concat 으로 계층마다 다른 관점들을 블랜딩 함으로써 표현이 주의깊은 추상화가 됨
+		+ fully connected layer 가 한개
+	+ iterative refinement architecture
+		+ 이전 LSTM 레이어의 information을 다음 레이어의 initialisation 함으로써 반복적 정제 아키텍쳐를 가진다고 함.
+	+ 3-way softmax
+		+ 3-class
+	+ Max pooling is defined in the standard way of taking the highest value over each dimension of the hidden states = u
+	+ sentence encoder 에서의 u1, u2, u3 은 concat 하여 나오고, premise와 hypothesis, 2개의 encoder가 있음.
+	
 * [ ] Learning Sentence Similarity with Siamese Recurrent Architectures
 	+ https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/download/12195/12023
 * [ ] Fine-Tuned LM-Pretrained Transformer
