@@ -10,6 +10,7 @@ train_data = Path.cwd() / 'data_in' / 'snli_1.0_train.txt'
 data = pd.read_csv(train_data, sep='\t').loc[:, ['sentence1', 'sentence2', 'gold_label']]
 # train data에서 Nan 값 지우고
 #data = data.loc[data['gold_label'].isin(['-']).apply(lambda elm: not elm), :]
+data = data[data.gold_label != '-']
 # train, valid 파일을 8:2로 나눔
 train, eval = train_test_split(data, test_size=0.2, shuffle=True, random_state=777)
 # train 데이터 tab으로 저장
