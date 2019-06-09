@@ -2,7 +2,15 @@ import os
 import sys
 import tensorflow as tf
 from argparse import ArgumentParser
+
 from model.net import NLIModel
+from model.data import get_data
+import time
+
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"  # For TEST
 
 parser = ArgumentParser(description='Helsinki NLI')
 parser.add_argument("--corpus",
@@ -14,7 +22,7 @@ parser.add_argument('--epochs',
                     default=20)
 parser.add_argument('--batch_size',
                     type=int,
-                    default=64)
+                    default=512)
 parser.add_argument("--encoder_type",
                     type=str,
                     choices=['BiLSTMMaxPoolEncoder',
@@ -83,65 +91,151 @@ parser.add_argument('--seed',
                     default=1234)
 parser.add_argument('--max_len',
                     type=int,
-                    default=10)
+                    default=42)
 
 
 config = parser.parse_args()
 
-imdb = tf.keras.datasets.imdb
-(train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
+# imdb = tf.keras.datasets.imdb
+# (train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
+#
+# # A dictionary mapping words to an integer index
+# word_index = imdb.get_word_index()
+#
+# # The first indices are reserved
+# word_index = {k:(v+3) for k,v in word_index.items()}
+# word_index["<PAD>"] = 0
+# word_index["<START>"] = 1
+# word_index["<UNK>"] = 2  # unknown
+# word_index["<UNUSED>"] = 3
+#
+# reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
+#
+# def decode_review(text):
+#     return ' '.join([reverse_word_index.get(i, '?') for i in text])
+#
+# train_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
+#                                                         value=word_index["<PAD>"],
+#                                                         padding='post',
+#                                                         maxlen=config.max_len)
+#
+# test_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
+#                                                         value=word_index["<PAD>"],
+#                                                         padding='post',
+#                                                         maxlen=config.max_len)
 
-# A dictionary mapping words to an integer index
-word_index = imdb.get_word_index()
 
-# The first indices are reserved
-word_index = {k:(v+3) for k,v in word_index.items()}
-word_index["<PAD>"] = 0
-word_index["<START>"] = 1
-word_index["<UNK>"] = 2  # unknown
-word_index["<UNUSED>"] = 3
+data_path = 'data/snli/'
 
-reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
+training = get_data(data_path + 'snli_1.0_train.jsonl')
+validation = get_data(data_path + 'snli_1.0_dev.jsonl')
+test = get_data(data_path + 'snli_1.0_test.jsonl')
 
-def decode_review(text):
-    return ' '.join([reverse_word_index.get(i, '?') for i in text])
+tokenizer = Tokenizer(lower=False, filters='')
+tokenizer.fit_on_texts(training[0] + training[1])
+tokenizer.fit_on_texts(validation[0] + validation[1])
 
-train_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
-                                                        value=word_index["<PAD>"],
-                                                        padding='post',
-                                                        maxlen=config.max_len)
+VOCAB = len(tokenizer.word_counts) + 1
+LABELS = {'contradiction': 0, 'neutral': 1, 'entailment': 2}
 
-test_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
-                                                        value=word_index["<PAD>"],
-                                                        padding='post',
-                                                        maxlen=config.max_len)
+to_seq = lambda X: pad_sequences(tokenizer.texts_to_sequences(X), maxlen=config.max_len)
+prepare_data = lambda data: (to_seq(data[0]), to_seq(data[1]), data[2])
 
+training = prepare_data(training)
+validation = prepare_data(validation)
+test = prepare_data(test)
 
-config.embed_size = len(word_index)
-config.out_dim = 2
+print('Build model...')
+print('Vocab size =', VOCAB)
+
+config.embed_size = VOCAB
+config.out_dim = len(LABELS)
 
 model = NLIModel(config)
 
-model.compile(loss='binary_crossentropy',
-              optimizer=config.optimizer,
-              metrics=['accuracy'])
+# model.compile(loss='binary_crossentropy',
+#               optimizer=config.optimizer,
+#               metrics=['accuracy'])
 
-early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                              min_delta=0,
-                              patience=2,
-                              verbose=0, mode='auto')
+# early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+#                               min_delta=0,
+#                               patience=2,
+#                               verbose=0, mode='auto')
 
-train_data = train_data[:100]
-train_labels = train_labels[:100]
+tr_dataset = tf.data.Dataset.from_tensor_slices((training[0], training[1], training[2])).shuffle(len(training[2]))
+# tr_dataset = tf.data.Dataset.from_tensor_slices((validation[0], validation[1], validation[2])).shuffle(len(validation))
+tr_dataset = tr_dataset.batch(config.batch_size, drop_remainder=True)
 
-history = model.fit(
-    [train_data, train_data],
-    train_labels,
-    epochs=7,
-    batch_size=16,
-    validation_split=0.2,
-	callbacks=[early_stopping])
+tr_loss_metric = tf.keras.metrics.Mean(name='train_loss')
+tr_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
 
+opt = tf.optimizers.Adam(learning_rate = config.learning_rate)
+loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
+
+ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=opt, net=model)
+manager = tf.train.CheckpointManager(ckpt, './data_out/tf_ckpts', max_to_keep=3)
+ckpt.restore(manager.latest_checkpoint)
+
+if manager.latest_checkpoint:
+	print("Restored from {}".format(manager.latest_checkpoint))
+else:
+	print("Initializing from scratch.")
+
+start = time.time()
+
+tr_loss = 0
+
+# from tensorflow.keras.utils import to_categorical
+
+for step, tr in enumerate(tr_dataset):
+
+    x1_tr, x2_tr, y_tr = tr
+
+    with tf.GradientTape() as tape:
+        logits = model(x1_tr, x2_tr)
+        loss = loss_fn(y_tr, logits)
+        grads = tape.gradient(target=loss, sources=model.trainable_variables)
+    opt.apply_gradients(grads_and_vars=zip(grads, model.trainable_variables))
+
+    tr_loss_metric.update_state(loss)
+    tr_acc_metric.update_state(y_tr, logits)
+
+    if step % 10 == 0:
+
+        # a = tf.round(tf.nn.sigmoid(logits))
+        # b = to_categorical(y_tr, len(LABELS))
+
+        # correct_prediction = tf.equal(a, b)
+        # print(correct_prediction)
+        # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        # tr_loss /= (step+1)
+
+        tr_mean_loss = tr_loss_metric.result()
+        tr_mean_accuracy = tr_acc_metric.result()
+
+        template = 'Epoch {} Batch {} Loss {:.4f} Acc {:.4f} Time {:.4f}'
+        print(template.format(step + 1, step, tr_mean_loss, tr_mean_accuracy, (time.time() - start)))
+        save_path = manager.save()
+
+        # tr_loss = 0
+
+
+
+
+
+
+
+
+# history = model.fit(
+#     [train_data, train_data],
+#     train_labels,
+#     epochs=7,
+#     batch_size=16,
+#     validation_split=0.2,
+# 	)
+
+# callbacks=[early_stopping]
 # test_loss, test_acc = classifier.evaluate(test_data, test_labels)
 
 
