@@ -1,44 +1,101 @@
+import os
+import sys
 import tensorflow as tf
-import pickle
-import pandas as pd
+from argparse import ArgumentParser
+from model.net import NLIModel
 
-from tensorflow.keras import layers
-from sklearn.model_selection import train_test_split
-from model.data import Corpus
-from konlpy.tag import Mecab
-from pathlib import Path
-import json
-import pandas as pd
+parser = ArgumentParser(description='Helsinki NLI')
+parser.add_argument("--corpus",
+                    type=str,
+                    choices=['snli', 'breaking_nli', 'multinli_matched', 'multinli_mismatched', 'scitail', 'all_nli'],
+                    default='snli')
+parser.add_argument('--epochs',
+                    type=int,
+                    default=20)
+parser.add_argument('--batch_size',
+                    type=int,
+                    default=64)
+parser.add_argument("--encoder_type",
+                    type=str,
+                    choices=['BiLSTMMaxPoolEncoder',
+                             'LSTMEncoder',
+                             'HBMP'],
+                    default='LSTMEncoder')
+parser.add_argument("--activation",
+                    type=str,
+                    choices=['tanh', 'relu', 'leakyrelu'],
+                    default='relu')
+parser.add_argument("--optimizer",
+                    type=str,
+                    choices=['rprop',
+                             'adadelta',
+                             'adagrad',
+                             'rmsprop',
+                             'adamax',
+                             'asgd',
+                             'adam',
+                             'sgd'],
+                    default='adam')
+parser.add_argument('--embed_dim',
+                    type=int,
+                    default=300)
+parser.add_argument('--fc_dim',
+                    type=int,
+                    default=600)
+parser.add_argument('--hidden_dim',
+                    type=int,
+                    default=600)
+parser.add_argument('--layers',
+                    type=int,
+                    default=1)
+parser.add_argument('--dropout',
+                    type=float,
+                    default=0.1)
+parser.add_argument('--learning_rate',
+                    type=float,
+                    default=0.0005)
+parser.add_argument('--lr_patience',
+                    type=int,
+                    default=1)
+parser.add_argument('--lr_decay',
+                    type=float,
+                    default=0.99)
+parser.add_argument('--lr_reduction_factor',
+                    type=float,
+                    default=0.2)
+parser.add_argument('--weight_decay',
+                    type=float,
+                    default=0)
+parser.add_argument('--preserve_case',
+                    action='store_false',
+                    dest='lower')
+parser.add_argument('--word_embedding',
+                    type=str,
+                    default='glove.840B.300d')
+parser.add_argument('--early_stopping_patience',
+                    type=int,
+                    default=3)
+parser.add_argument('--save_path',
+                    type=str,
+                    default='results')
+parser.add_argument('--seed',
+                    type=int,
+                    default=1234)
+parser.add_argument('--max_len',
+                    type=int,
+                    default=10)
 
-proj_dir = Path.cwd()
-params = json.load((proj_dir / 'params' / 'config.json').open())
-train_path = params['filepath'].get('tr')
-val_path = params['filepath'].get('val')
-w2v_path = params['filepath'].get('vocab')
 
-with open(w2v_path, mode='rb') as io:
-	w2v_vocab = pickle.load(io)
+config = parser.parse_args()
 
-tokenized = Mecab()
-processing = Corpus(vocab=w2v_vocab, tokenizer=tokenized)
+imdb = tf.keras.datasets.imdb
+(train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
 
-
-# Pad length를 통해 추가로 길이를 맞추어 주자
-# MAXLEN = 500
-
-MAXLEN = 500
-EMB_DIM = 128
-VOC_SIZE = 10000
-use_w2v = True
-
-
-
-
-# integers에서 words로 변환
+# A dictionary mapping words to an integer index
 word_index = imdb.get_word_index()
 
-# 첫 값들을 넣기 위하여 +3을 해준다
-word_index = {k: (v+3) for k,v in word_index.items()}
+# The first indices are reserved
+word_index = {k:(v+3) for k,v in word_index.items()}
 word_index["<PAD>"] = 0
 word_index["<START>"] = 1
 word_index["<UNK>"] = 2  # unknown
@@ -47,73 +104,26 @@ word_index["<UNUSED>"] = 3
 reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
 
 def decode_review(text):
-	return ' '.join([reverse_word_index.get(i, '?') for i in text])
-
-decode_review(train_data[0])
+    return ' '.join([reverse_word_index.get(i, '?') for i in text])
 
 train_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
                                                         value=word_index["<PAD>"],
                                                         padding='post',
-                                                        maxlen=MAXLEN)
+                                                        maxlen=config.max_len)
 
 test_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
                                                         value=word_index["<PAD>"],
                                                         padding='post',
-                                                        maxlen=MAXLEN)
+                                                        maxlen=config.max_len)
 
 
-class SimpleClassifier(tf.keras.Model):
+config.embed_size = len(word_index)
+config.out_dim = 2
 
-	def __init__(self, max_len, emb_dim, vocab_size):
+model = NLIModel(config)
 
-		super(SimpleClassifier, self).__init__()
-
-		self.MAX_LEN = max_len
-		self.EMB_DIM = emb_dim
-		self.VOC_SIZE = vocab_size
-
-		self._embedding = layers.Embedding(self.VOC_SIZE, self.EMB_DIM, input_length=self.MAX_LEN)
-		self._reshape = layers.Reshape((self.MAX_LEN, self.EMB_DIM, 1))
-
-		self._cnn_filter_3 = layers.Conv2D(100, kernel_size=(3, self.EMB_DIM), padding='valid',
-		                                   kernel_initializer='normal', activation='relu') # filters, kernel size
-		self._max_pool_3 = layers.MaxPooling2D((self.MAX_LEN - 3 + 1, 1), strides=(1,1), padding='valid')
-
-		self._cnn_filter_4 = layers.Conv2D(100, (4, self.EMB_DIM), padding='valid',
-		                                   kernel_initializer='normal', activation='relu') # filters, kernel size
-		self._max_pool_4 = layers.MaxPooling2D((self.MAX_LEN - 4 + 1, 1), strides=(1,1), padding='valid')
-
-		self._cnn_filter_5 = layers.Conv2D(100, (5, self.EMB_DIM), padding='valid',
-		                                   kernel_initializer='normal', activation='relu') # filters, kernel size
-		self._max_pool_5 = layers.MaxPooling2D((self.MAX_LEN - 5 + 1, 1), strides=(1,1), padding='valid')
-
-		self._fc_dense = layers.Flatten()
-		self._dropout = layers.Dropout(0.5)
-		self._dense_out = layers.Dense(1, activation='sigmoid')
-
-	def call(self, x):
-
-		emb_layer = self._embedding(x)
-		emb_layer = self._reshape(emb_layer)
-
-		cnn_1 = self._cnn_filter_3(emb_layer)
-		max_1 = self._max_pool_3(cnn_1)
-		cnn_2 = self._cnn_filter_4(emb_layer)
-		max_2 = self._max_pool_4(cnn_2)
-		cnn_3 = self._cnn_filter_5(emb_layer)
-		max_3 = self._max_pool_5(cnn_3)
-
-		concat = layers.concatenate([max_1, max_2, max_3])
-		dense_fc = self._fc_dense(concat)
-		drop_out = self._dropout(dense_fc)
-		dense_out = self._dense_out(drop_out)
-
-		return dense_out
-
-classifier = SimpleClassifier(MAXLEN, EMB_DIM, VOC_SIZE)
-
-classifier.compile(loss='binary_crossentropy',
-              optimizer='adam',
+model.compile(loss='binary_crossentropy',
+              optimizer=config.optimizer,
               metrics=['accuracy'])
 
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
@@ -121,15 +131,47 @@ early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                               patience=2,
                               verbose=0, mode='auto')
 
-history = classifier.fit(
-    train_data,
+train_data = train_data[:100]
+train_labels = train_labels[:100]
+
+history = model.fit(
+    [train_data, train_data],
     train_labels,
     epochs=7,
-    batch_size=512,
+    batch_size=16,
     validation_split=0.2,
 	callbacks=[early_stopping])
 
-test_loss, test_acc = classifier.evaluate(test_data, test_labels)
+# test_loss, test_acc = classifier.evaluate(test_data, test_labels)
 
-plot_graphs(history, 'accuracy')
-plot_graphs(history, 'loss')
+
+
+
+# import pickle
+# import pandas as pd
+#
+# from tensorflow.keras import layers
+# from sklearn.model_selection import train_test_split
+# from model.data import Corpus
+# from konlpy.tag import Mecab
+# from pathlib import Path
+# import json
+# import pandas as pd
+#
+# proj_dir = Path.cwd()
+# params = json.load((proj_dir / 'params' / 'config.json').open())
+# train_path = params['filepath'].get('tr')
+# val_path = params['filepath'].get('val')
+# w2v_path = params['filepath'].get('vocab')
+#
+# with open(w2v_path, mode='rb') as io:
+# 	w2v_vocab = pickle.load(io)
+#
+# tokenized = Mecab()
+# processing = Corpus(vocab=w2v_vocab, tokenizer=tokenized)
+#
+#
+# # Pad length를 통해 추가로 길이를 맞추어 주자
+# # MAXLEN = 500
+#
+# M\

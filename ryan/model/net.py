@@ -14,6 +14,7 @@ class FCClassifier(tf.keras.Model):
 		self.fc_dim = config.fc_dim
 		self.out_dim = config.out_dim
 		self.activation = config.activation # 'relu'
+		self.dropout = config.dropout
 
 		if self.config.encoder_type == 'BiLSTMMaxPoolEncoder':
 			self.seq_in_size *= 2
@@ -47,8 +48,8 @@ class NLIModel(tf.keras.Model):
 		self.classifier = FCClassifier(config)
 
 	def call(self, x):
-		prem = self.sentence_embedding(x.premise)
-		hypo = self.sentence_embedding(x.hypothesis)
+		prem = self.sentence_embedding(x[0])
+		hypo = self.sentence_embedding(x[1])
 		answer = self.classifier(prem, hypo)
 
 		return answer
