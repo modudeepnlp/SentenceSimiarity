@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from model.net import NLIModel
 from model.data import get_data
 import time
+from tqdm import tqdm
 
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -170,7 +171,7 @@ tr_loss_metric = tf.keras.metrics.Mean(name='train_loss')
 tr_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
 
 opt = tf.optimizers.Adam(learning_rate = config.learning_rate)
-loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
+loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=False)
 
 ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=opt, net=model)
 manager = tf.train.CheckpointManager(ckpt, './data_out/tf_ckpts', max_to_keep=3)
@@ -181,42 +182,48 @@ if manager.latest_checkpoint:
 else:
 	print("Initializing from scratch.")
 
-start = time.time()
-
-tr_loss = 0
-
 # from tensorflow.keras.utils import to_categorical
 
-for step, tr in enumerate(tr_dataset):
+for epoch in tqdm(range(config.epochs), desc='epochs'):
 
-    x1_tr, x2_tr, y_tr = tr
+    start = time.time()
 
-    with tf.GradientTape() as tape:
-        logits = model(x1_tr, x2_tr)
-        loss = loss_fn(y_tr, logits)
-        grads = tape.gradient(target=loss, sources=model.trainable_variables)
-    opt.apply_gradients(grads_and_vars=zip(grads, model.trainable_variables))
+    tr_loss_metric.reset_states()
+    tr_acc_metric.reset_states()
 
-    tr_loss_metric.update_state(loss)
-    tr_acc_metric.update_state(y_tr, logits)
+    tf.keras.backend.set_learning_phase(1)
+    tr_loss = 0
 
-    if step % 10 == 0:
+    for step, tr in tqdm(enumerate(tr_dataset), desc='steps'):
 
-        # a = tf.round(tf.nn.sigmoid(logits))
-        # b = to_categorical(y_tr, len(LABELS))
+        x1_tr, x2_tr, y_tr = tr
 
-        # correct_prediction = tf.equal(a, b)
-        # print(correct_prediction)
-        # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        with tf.GradientTape() as tape:
+            logits = model(x1_tr, x2_tr)
+            loss = loss_fn(y_tr, logits)
+            grads = tape.gradient(target=loss, sources=model.trainable_variables)
+        opt.apply_gradients(grads_and_vars=zip(grads, model.trainable_variables))
 
-        # tr_loss /= (step+1)
+        tr_loss_metric.update_state(loss)
+        tr_acc_metric.update_state(y_tr, logits)
 
-        tr_mean_loss = tr_loss_metric.result()
-        tr_mean_accuracy = tr_acc_metric.result()
+        if step % 10 == 0:
 
-        template = 'Epoch {} Batch {} Loss {:.4f} Acc {:.4f} Time {:.4f}'
-        print(template.format(step + 1, step, tr_mean_loss, tr_mean_accuracy, (time.time() - start)))
-        save_path = manager.save()
+            # a = tf.round(tf.nn.sigmoid(logits))
+            # b = to_categorical(y_tr, len(LABELS))
+
+            # correct_prediction = tf.equal(a, b)
+            # print(correct_prediction)
+            # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+            # tr_loss /= (step+1)
+
+            tr_mean_loss = tr_loss_metric.result()
+            tr_mean_accuracy = tr_acc_metric.result()
+
+            template = 'Epoch {} Step {} Loss {:.4f} Acc {:.4f} Time {:.4f}'
+            print(template.format(epoch + 1, step, tr_mean_loss, tr_mean_accuracy, (time.time() - start)))
+            save_path = manager.save()
 
         # tr_loss = 0
 

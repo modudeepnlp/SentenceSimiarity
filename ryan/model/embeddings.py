@@ -48,75 +48,72 @@ class LSTMEncoder(tf.keras.Model):
         return embedding
 
 
-# class BiLSTMMaxPoolEncoder(tf.keras.Model):
-#     """
-#     Bidirectional LSTM with max pooling
-#     """
-#     def __init__(self, config):
-#         super(BiLSTMMaxPoolEncoder, self).__init__()
-#         self.config = config
-#         self.rnn1 = nn.LSTM(input_size=config.embed_dim,
-#                            hidden_size=config.hidden_dim,
-#                            num_layers=config.layers,
-#                            dropout=config.dropout,
-#                            bidirectional=True)
-#
-#         self.max_pool = nn.AdaptiveMaxPool1d(1)
-#
-#     def forward(self, inputs):
-#         batch_size = inputs.size()[1]
-#         h_0 = c_0 = Variable(inputs.data.new(self.config.cells,
-#                                              batch_size,
-#                                              self.config.hidden_dim).zero_())
-#         embedding = self.rnn1(inputs, (h_0, c_0))[0]
-#         # Max pooling
-#         emb = self.max_pool(embedding.permute(1,2,0))
-#         emb = emb.squeeze(2)
-#         return emb
+class BiLSTMMaxPoolEncoder(tf.keras.Model):
+    """
+    Bidirectional LSTM with max pooling
+    """
+    def __init__(self, config):
+        super(BiLSTMMaxPoolEncoder, self).__init__()
+        self.config = config
+        self.rnn = layers.LSTM(
+                           units=config.hidden_dim,
+                           dropout=config.dropout,
+                            )
+        self.bidirectional = layers.Bidirectional
+
+        self.max_pool = layers.MaxPool1D(1)
+
+    def call(self, x):
+
+        embedding = self.rnn(x)
+        embedding = self.bidirectional(embedding)
+        # Max pooling
+        emb = self.max_pool(embedding)
+        emb = emb.squeeze(2)
+        return emb
 
 
-# class HBMP(nn.Module):
-#     """
-#     Hierarchical Bi-LSTM Max Pooling Encoder
-#     """
-#     def __init__(self, config):
-#         super(HBMP, self).__init__()
-#         self.config = config
-#         self.max_pool = nn.AdaptiveMaxPool1d(1)
-#         self.cells = config.cells
-#         self.hidden_dim = config.hidden_dim
-#         self.rnn1 = nn.LSTM(input_size=config.embed_dim,
-#                             hidden_size=config.hidden_dim,
-#                             num_layers=config.layers,
-#                             dropout=config.dropout,
-#                             bidirectional=True)
-#         self.rnn2 = nn.LSTM(input_size=config.embed_dim,
-#                             hidden_size=config.hidden_dim,
-#                             num_layers=config.layers,
-#                             dropout=config.dropout,
-#                             bidirectional=True)
-#         self.rnn3 = nn.LSTM(input_size=config.embed_dim,
-#                             hidden_size=config.hidden_dim,
-#                             num_layers=config.layers,
-#                             dropout=config.dropout,
-#                             bidirectional=True)
-#
-#
-#     def forward(self, inputs):
-#         batch_size = inputs.size()[1]
-#         h_0 = c_0 = Variable(inputs.data.new(self.config.cells,
-#                                              batch_size,
-#                                              self.config.hidden_dim).zero_())
-#         out1, (ht1, ct1) = self.rnn1(inputs, (h_0, c_0))
-#         emb1 = self.max_pool(out1.permute(1,2,0)).permute(2,0,1)
-#
-#         out2, (ht2, ct2) = self.rnn2(inputs, (ht1, ct1))
-#         emb2 = self.max_pool(out2.permute(1,2,0)).permute(2,0,1)
-#
-#         out3, (ht3, ct3) = self.rnn3(inputs, (ht2, ct2))
-#         emb3 = self.max_pool(out3.permute(1,2,0)).permute(2,0,1)
-#
-#         emb = torch.cat([emb1, emb2, emb3], 2)
-#         emb = emb.squeeze(0)
-#
-#         return emb
+class HBMP(tf.keras.Model):
+    """
+    Hierarchical Bi-LSTM Max Pooling Encoder
+    """
+    def __init__(self, config):
+        super(HBMP, self).__init__()
+        self.config = config
+        self.max_pool = layers.MaxPool1D(1)
+
+        self.cells = config.cells
+
+        self.hidden_dim = config.hidden_dim
+        self.rnn1 = layers.LSTM(
+	        units=config.hidden_dim,
+	        dropout=config.dropout,
+        )
+        self.rnn2 = layers.LSTM(
+	        units=config.hidden_dim,
+	        dropout=config.dropout,
+        )
+        self.rnn3 = layers.LSTM(
+	        units=config.hidden_dim,
+	        dropout=config.dropout,
+        )
+        self.bidirectional = layers.Bidirectional
+
+    def call(self, x):
+
+        emb1 = self.rnn1(x)
+        emb1 = self.bidirectional(emb1)
+        emb1 = self.max_pool(emb1)
+
+        emb2 = self.rnn2(x)
+        emb2 = self.bidirectional(emb2)
+        emb2 = self.max_pool(emb2)
+
+        emb3 = self.rnn3(x)
+        emb3 = self.bidirectional(emb3)
+        emb3 = self.max_pool(emb3)
+
+        emb = tf.concat([emb1,emb2,emb3], axis=2)
+        emb = emb.squeeze(0)
+
+        return emb
