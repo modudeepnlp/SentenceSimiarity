@@ -24,8 +24,8 @@ class SNLI(nn.Module):
 
         # output = sentence1_ctx - sentence2_ctx
         output = torch.cat([sentence1_ctx, sentence2_ctx, torch.abs(sentence1_ctx - sentence2_ctx), sentence1_ctx * sentence2_ctx], 1)
-        output = self.layout1(output)
-        output = self.layout2(output)
+        output = F.relu(self.layout1(output))
+        output = F.relu(self.layout2(output))
         output = self.layout3(output)
         return output
 

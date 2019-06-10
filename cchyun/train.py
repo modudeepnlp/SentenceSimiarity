@@ -8,16 +8,19 @@ import torch
 import torch.utils.data
 
 
-def build_tensor(label, sentence1, sentence2, batch_size=256):
-    torch_labe = torch.tensor(label, dtype=torch.long).cuda()
-    torch_sentence1 = torch.tensor(sentence1, dtype=torch.long).cuda()
-    torch_sentence2 = torch.tensor(sentence2, dtype=torch.long).cuda()
+def build_tensor(label, sentence1, sentence2, device, batch_size=256):
+    torch_labe = torch.tensor(label, dtype=torch.long).to(device)
+    torch_sentence1 = torch.tensor(sentence1, dtype=torch.long).to(device)
+    torch_sentence2 = torch.tensor(sentence2, dtype=torch.long).to(device)
     dataset = torch.utils.data.TensorDataset(torch_labe, torch_sentence1, torch_sentence2)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     return loader
 
 
 def main():
+    # cuda or cpu
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+
     vocab = data.load_vocab("data/vocab.txt")
     print("load_vocab .......................... %d" % len(vocab))
     train_labe, train_sentence1, train_sentence2 = data.load_data("data/snli_1.0/snli_1.0_train.txt", vocab)
@@ -29,11 +32,12 @@ def main():
     print("load_data test ...................... %d" % len(test_labe))
 
     config = model.SNLIConfig({
+        "device": device, # cpu 또는 gpu 사용
         "n_embed": len(vocab), "d_embed": 32, "n_output": 3, "n_epoch": 10, "n_batch": 256,
         "n_layer": 1, "cells": 2, "dropout": 0.1 ## HBMP
     })
     snli = model.SNLI(config=config)
-    snli.cuda()
+    snli.to(config.device)
 
     seed = 1029
     torch.manual_seed(seed)
@@ -43,9 +47,9 @@ def main():
     loss_fn = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(snli.parameters(), lr=0.01)
 
-    train_loader = build_tensor(train_labe, train_sentence1, train_sentence2, config.n_batch)
-    dev_loader = build_tensor(dev_labe, dev_sentence1, dev_sentence2, config.n_batch)
-    test_loader = build_tensor(test_labe, test_sentence1, test_sentence2, config.n_batch)
+    train_loader = build_tensor(train_labe, train_sentence1, train_sentence2, config.device, config.n_batch)
+    dev_loader = build_tensor(dev_labe, dev_sentence1, dev_sentence2, config.device, config.n_batch)
+    test_loader = build_tensor(test_labe, test_sentence1, test_sentence2, config.device, config.n_batch)
 
     epochs = []
     dev_score = []
