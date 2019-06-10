@@ -12,7 +12,7 @@ label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
 """
 pickle로 vocab 로드
 """
-def load_vocab(file="Data/vocab.txt"):
+def load_vocab(file="data/vocab.txt"):
     vocab = {}
     index = 0
     with open(file, "r") as f:
@@ -32,8 +32,6 @@ def load_data(file, vocab):
 
     dataset = pd.read_csv(file, sep="\t")
     for i, row in dataset.iterrows():
-        if i != 0 and i % 1000 == 0:
-                print("{0} : {1} sentences".format(file, i))
         if row['gold_label'] == "-" or pd.isnull(row['sentence1']) or pd.isnull(row['sentence2']):
             continue
 
@@ -76,17 +74,17 @@ def main():
     vocab = load_vocab()
     print("vocab size: {}".format(len(vocab)))
 
-    train_labe, train_sentence1, train_sentence2 = load_data("Data/snli_1.0/snli_1.0_train.txt", vocab)
+    train_labe, train_sentence1, train_sentence2 = load_data("data/snli_1.0/snli_1.0_train.txt", vocab)
     print("train zero: {} / {}".format(zero_count(train_labe), len(train_labe)))
     print("train sentence1: {}".format(sentence_len(train_sentence1)))
     print("train sentence2: {}".format(sentence_len(train_sentence2)))
 
-    dev_labe, dev_sentence1, dev_sentence2 = load_data("Data/snli_1.0/snli_1.0_dev.txt", vocab)
+    dev_labe, dev_sentence1, dev_sentence2 = load_data("data/snli_1.0/snli_1.0_dev.txt", vocab)
     print("dev zero: {} / {}".format(zero_count(dev_labe), len(dev_labe)))
     print("dev sentence1: {}".format(sentence_len(dev_sentence1)))
     print("dev sentence2: {}".format(sentence_len(dev_sentence2)))
 
-    test_labe, test_sentence1, test_sentence2 = load_data("Data/snli_1.0/snli_1.0_test.txt", vocab)
+    test_labe, test_sentence1, test_sentence2 = load_data("data/snli_1.0/snli_1.0_test.txt", vocab)
     print("dev zero: {} / {}".format(zero_count(test_labe), len(test_labe)))
     print("dev sentence1: {}".format(sentence_len(test_sentence1)))
     print("dev sentence2: {}".format(sentence_len(test_sentence2)))

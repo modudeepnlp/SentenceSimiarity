@@ -27,13 +27,13 @@ def load_tokens(file):
 
 def main():
     tokens = []
-    tokens.extend(load_tokens("Data/snli_1.0/snli_1.0_train.txt"))
-    tokens.extend(load_tokens("Data/snli_1.0/snli_1.0_dev.txt"))
-    tokens.extend(load_tokens("Data/snli_1.0/snli_1.0_test.txt"))
+    tokens.extend(load_tokens("data/snli_1.0/snli_1.0_train.txt"))
+    tokens.extend(load_tokens("data/snli_1.0/snli_1.0_dev.txt"))
+    tokens.extend(load_tokens("data/snli_1.0/snli_1.0_test.txt"))
 
     counter = nlp.data.count_tokens(tokens)
     vocab = nlp.Vocab(counter, bos_token=None, eos_token=None)
-    with open("Data/vocab.txt", "w") as f:
+    with open("data/vocab.txt", "w") as f:
         for token in vocab.idx_to_token:
             f.write(token)
             f.write("\n")
