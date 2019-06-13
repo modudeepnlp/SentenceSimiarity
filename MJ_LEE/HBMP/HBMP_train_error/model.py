@@ -47,10 +47,10 @@ class Classifier(nn.Module):
         self.dropout = nn.Dropout(p=config.dropout_keep_prob)
 
     def forward(self, premise, hypothesis):
-        prem = self.sent_enc_p(premise) # [batch, dim * 3]
+        prem = self.sent_enc_p(premise) # [batch, dim * 2 * 3]
         hypo = self.sent_enc_p(hypothesis)
         similarity = torch.cat([prem, hypo, torch.abs(prem-hypo), prem*hypo], 1).cuda()
-        # print(similarity.shape) # [32, 768] # [batch, dim] (32 * 2 * 3 * 4 = 768)
+        # print(similarity.shape) # [32, 768] # [batch, dim] (batch * 2 * 3 * 4 = 768)
         dim_size = similarity.shape[1]
         
         dense = nn.Linear(dim_size, 128).cuda()
