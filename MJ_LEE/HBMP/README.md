@@ -1,5 +1,5 @@
-1 epoch 
-  Loss 1.1 -> 0.7
+## 1 epoch 
+  - Loss 1.1 -> 0.7
 2 epoch 
   Loss 0.7 -> 0.5
 3 epoch ~ 5 epoch
