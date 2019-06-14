@@ -24,7 +24,7 @@ class Sentence_Encoder(nn.Module):
     def forward(self, sentence):
         look_up = self.embedding(sentence) # look_up = [seq, batch, dim] # dim = embedding
 
-        out1, (h1, c1) = self.LSTM1(look_up, (self.init_h, self.init_c)) # out = [batch, seq, dim] # dim = hidden
+        out1, (h1, c1) = self.LSTM1(look_up, (self.init_h, self.init_c)) # out = [seq, batch, dim] # dim = hidden
         u1 = self.__max_pooling(out1) # u = [batch, dim * 2] # bi_direct = 2
 
         out2, (h2, c2) = self.LSTM2(look_up, (h1, c1))
