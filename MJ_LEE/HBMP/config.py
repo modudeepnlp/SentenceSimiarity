@@ -1,0 +1,11 @@
+embedding_dim = 32
+hidden_size = 32
+batch = 32
+cpu_processor = 2
+epoch = 30
+max_seq = 50
+linear_hidden_size = 32
+linear_dropout_keep_prob = 0.1
+output_class = 3
+learning_rate = 0.0005
+gpu = 'cuda:0'
