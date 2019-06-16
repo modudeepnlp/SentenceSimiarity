@@ -26,6 +26,6 @@ def get_data(fn, limit=None):
 
 	LABELS = {'contradiction': 0, 'neutral': 1, 'entailment': 2}
 	Y = np.array([LABELS[l] for l, s1, s2 in raw_data])
-	# Y = to_categorical(Y, len(LABELS))
+	Y = to_categorical(Y, len(LABELS))
 
 	return left, right, Y

@@ -51,12 +51,12 @@ class NLIModel(tf.keras.Model):
 		self.sentence_embedding = SentenceEmbedding(config)
 		self.classifier = FCClassifier(config)
 
-	def call(self, x1, x2):
+	def call(self, x):
 
-		# prem = self.sentence_embedding(x[0])
-		# hypo = self.sentence_embedding(x[1])
-		prem = self.sentence_embedding(x1)
-		hypo = self.sentence_embedding(x2)
+		prem = self.sentence_embedding(x[0])
+		hypo = self.sentence_embedding(x[1])
+		# prem = self.sentence_embedding(x1)
+		# hypo = self.sentence_embedding(x2)
 		answer = self.classifier(prem, hypo)
 
 		return answer
