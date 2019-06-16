@@ -82,7 +82,7 @@ class HBMP(tf.keras.Model):
         self.config = config
         self.max_pool = layers.MaxPool1D(1)
 
-        self.cells = config.cells
+        # self.cells = config.cells
 
         self.hidden_dim = config.hidden_dim
         self.rnn1 = layers.LSTM(

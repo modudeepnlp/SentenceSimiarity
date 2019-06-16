@@ -168,8 +168,8 @@ model.compile(loss='categorical_crossentropy',
 history = model.fit(
     [training[0], training[1]],
     training[2],
-    epochs=7,
-    batch_size=512,
+    epochs=config.epochs,
+    batch_size=config.batch_size,
     validation_split=0.2,
 	)
 

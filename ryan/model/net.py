@@ -31,7 +31,7 @@ class FCClassifier(tf.keras.Model):
 		x = layers.Dense(self.fc_dim, activation=self.activation)(x)
 		x = layers.Dropout(self.dropout)(x)
 		x = layers.Dense(self.fc_dim, activation=self.activation)(x)
-		x = layers.Dense(self.out_dim)(x)
+		x = layers.Dense(self.out_dim, activation='softmax')(x)
 
 		return x
 
