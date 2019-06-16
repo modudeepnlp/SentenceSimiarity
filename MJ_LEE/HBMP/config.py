@@ -11,7 +11,7 @@ linear_hidden_size = 64
 use_stop_word = False
 use_UNK = False
 use_remove_low_freq = False
-create_vocab_file_list = False
+create_vocab_file_list = True
 
 low_freq = 2
 max_seq = 21
