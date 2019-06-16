@@ -168,10 +168,13 @@ tr_dataset = tf.data.Dataset.from_tensor_slices((training[0], training[1], train
 tr_dataset = tr_dataset.batch(config.batch_size, drop_remainder=True)
 
 tr_loss_metric = tf.keras.metrics.Mean(name='train_loss')
-tr_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
+# tr_acc_metric = tf.keras.metrics.CategoricalCrossentropy(name='train_accuracy')
+tr_acc_metric = tf.keras.metrics.SparseCategoricalCrossentropy(name='train_accuracy')
 
 opt = tf.optimizers.Adam(learning_rate = config.learning_rate)
-loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=False)
+loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
+# loss_fn = tf.keras.backend.categorical_crossentropy
+# loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
 
 ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=opt, net=model)
 manager = tf.train.CheckpointManager(ckpt, './data_out/tf_ckpts', max_to_keep=3)
@@ -198,13 +201,15 @@ for epoch in tqdm(range(config.epochs), desc='epochs'):
 
         x1_tr, x2_tr, y_tr = tr
 
+        # y_tr = tf.keras.utils.to_categorical(y_tr, len(LABELS))
+
         with tf.GradientTape() as tape:
             logits = model(x1_tr, x2_tr)
-            loss = loss_fn(y_tr, logits)
-            grads = tape.gradient(target=loss, sources=model.trainable_variables)
+            train_loss = loss_fn(y_tr, logits)
+        grads = tape.gradient(target=train_loss, sources=model.trainable_variables)
         opt.apply_gradients(grads_and_vars=zip(grads, model.trainable_variables))
 
-        tr_loss_metric.update_state(loss)
+        tr_loss_metric.update_state(train_loss)
         tr_acc_metric.update_state(y_tr, logits)
 
         if step % 10 == 0:
@@ -216,7 +221,7 @@ for epoch in tqdm(range(config.epochs), desc='epochs'):
             # print(correct_prediction)
             # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-            # tr_loss /= (step+1)
+            tr_loss /= (step+1)
 
             tr_mean_loss = tr_loss_metric.result()
             tr_mean_accuracy = tr_acc_metric.result()
