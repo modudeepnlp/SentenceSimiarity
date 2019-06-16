@@ -56,8 +56,8 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             step += 1
-            if n % 50 == 0:
-                print(n , " loss : ", loss)
+            if n % 100 == 0:
+                print(n , " loss : ", loss.item())
                 step_list.append(step)
                 loss_list.append(loss)
       
