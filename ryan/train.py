@@ -7,6 +7,7 @@ from model.net import NLIModel
 from model.data import get_data
 import time
 from tqdm import tqdm
+import tempfile
 
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -20,7 +21,7 @@ parser.add_argument("--corpus",
                     default='snli')
 parser.add_argument('--epochs',
                     type=int,
-                    default=20)
+                    default=10)
 parser.add_argument('--batch_size',
                     type=int,
                     default=512)
@@ -29,7 +30,7 @@ parser.add_argument("--encoder_type",
                     choices=['BiLSTMMaxPoolEncoder',
                              'LSTMEncoder',
                              'HBMP'],
-                    default='LSTMEncoder')
+                    default='BiLSTMMaxPoolEncoder')
 parser.add_argument("--activation",
                     type=str,
                     choices=['tanh', 'relu', 'leakyrelu'],
@@ -158,10 +159,16 @@ model.compile(loss='categorical_crossentropy',
               optimizer=config.optimizer,
               metrics=['accuracy'])
 
-# early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-#                               min_delta=0,
-#                               patience=2,
-#                               verbose=0, mode='auto')
+print('Training')
+_, tmpfn = tempfile.mkstemp()
+# Save the best model during validation and bail out of training early if we're not improving
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                              min_delta=0,
+                              patience=2,
+                              verbose=0, mode='auto')
+model_ckpt = tf.keras.callbacks.ModelCheckpoint(tmpfn, save_best_only=True, save_weights_only=True)
+
+callbacks = [early_stopping, model_ckpt]
 
 # tr_dataset
 
@@ -170,78 +177,87 @@ history = model.fit(
     training[2],
     epochs=config.epochs,
     batch_size=config.batch_size,
-    validation_split=0.2,
+    validation_data=([validation[0], validation[1]], validation[2]),
+    callbacks=callbacks
 	)
 
+# Restore the best found model during validation
+model.load_weights(tmpfn)
+
+loss, acc = model.evaluate([test[0], test[1]], test[2], batch_size=config.batch_size)
+print('Test loss / test accuracy = {:.4f} / {:.4f}'.format(loss, acc))
+
+
+## TEST
 
 # tr_dataset = tf.data.Dataset.from_tensor_slices((training[0], training[1], training[2])).shuffle(len(training[2]))
 # # tr_dataset = tf.data.Dataset.from_tensor_slices((validation[0], validation[1], validation[2])).shuffle(len(validation))
 # tr_dataset = tr_dataset.batch(config.batch_size, drop_remainder=True)
-#
+
 # tr_loss_metric = tf.keras.metrics.Mean(name='train_loss')
 # # tr_acc_metric = tf.keras.metrics.CategoricalCrossentropy(name='train_accuracy')
 # tr_acc_metric = tf.keras.metrics.SparseCategoricalCrossentropy(name='train_accuracy')
-#
+
 # opt = tf.optimizers.Adam(learning_rate = config.learning_rate)
 # loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
 # # loss_fn = tf.keras.backend.categorical_crossentropy
 # # loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
-#
+
 # ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=opt, net=model)
 # manager = tf.train.CheckpointManager(ckpt, './data_out/tf_ckpts', max_to_keep=3)
 # ckpt.restore(manager.latest_checkpoint)
-#
+
 # if manager.latest_checkpoint:
 # 	print("Restored from {}".format(manager.latest_checkpoint))
 # else:
 # 	print("Initializing from scratch.")
-#
+
 # # from tensorflow.keras.utils import to_categorical
-#
+
 # for epoch in tqdm(range(config.epochs), desc='epochs'):
-#
+
 #     start = time.time()
-#
+
 #     tr_loss_metric.reset_states()
 #     tr_acc_metric.reset_states()
-#
+
 #     tf.keras.backend.set_learning_phase(1)
 #     tr_loss = 0
-#
+
 #     for step, tr in tqdm(enumerate(tr_dataset), desc='steps'):
-#
+
 #         x1_tr, x2_tr, y_tr = tr
-#
+
 #         # y_tr = tf.keras.utils.to_categorical(y_tr, len(LABELS))
-#
+
 #         with tf.GradientTape() as tape:
 #             logits = model(x1_tr, x2_tr)
 #             train_loss = loss_fn(y_tr, logits)
 #         grads = tape.gradient(target=train_loss, sources=model.trainable_variables)
 #         opt.apply_gradients(grads_and_vars=zip(grads, model.trainable_variables))
-#
+
 #         tr_loss_metric.update_state(train_loss)
 #         tr_acc_metric.update_state(y_tr, logits)
-#
+
 #         if step % 10 == 0:
-#
+
 #             # a = tf.round(tf.nn.sigmoid(logits))
 #             # b = to_categorical(y_tr, len(LABELS))
-#
+
 #             # correct_prediction = tf.equal(a, b)
 #             # print(correct_prediction)
 #             # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-#
+
 #             tr_loss /= (step+1)
-#
+
 #             tr_mean_loss = tr_loss_metric.result()
 #             tr_mean_accuracy = tr_acc_metric.result()
-#
+
 #             template = 'Epoch {} Step {} Loss {:.4f} Acc {:.4f} Time {:.4f}'
 #             print(template.format(epoch + 1, step, tr_mean_loss, tr_mean_accuracy, (time.time() - start)))
 #             save_path = manager.save()
-#
-#         # tr_loss = 0
+
+        # tr_loss = 0
 
 
 

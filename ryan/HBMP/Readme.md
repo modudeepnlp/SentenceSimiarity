@@ -16,3 +16,14 @@ Test loss / test accuracy = 0.5499 / 0.7906
 Train Acc: 0.8568
 Val Acc: 0.7899
 Test Acc: 0.7906
+
+HBMP
+LSTM
+Train Acc: 0.9528
+Val Acc: 0.750
+Test Acc: 0.745
+
+MAXPOOLINGLSTM
+
+
+HBMP

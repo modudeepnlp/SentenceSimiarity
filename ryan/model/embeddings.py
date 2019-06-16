@@ -67,7 +67,13 @@ class BiLSTMMaxPoolEncoder(tf.keras.Model):
 
         embedding = self.rnn(x)
         embedding = self.bidirectional(embedding)
+
+        print("############3")
+        print(embedding)
+        print("############3")
+        
         # Max pooling
+
         emb = self.max_pool(embedding)
         emb = emb.squeeze(2)
         return emb
