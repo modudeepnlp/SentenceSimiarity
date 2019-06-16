@@ -1,4 +1,6 @@
-Sentence Simiarity
+## Sentence Simiarity
+
+## MALSTM
 
 549367/549367 [==============================] - 18s 33us/sample - loss: 0.4061 - acc: 0.8473 - val_loss: 0.6200 - val_acc: 0.7748
 9824/9824 [==============================] - 0s 8us/sample - loss: 0.5542 - acc: 0.7845
@@ -17,13 +19,20 @@ Train Acc: 0.8568
 Val Acc: 0.7899
 Test Acc: 0.7906
 
-HBMP
-LSTM
+## HBMP
+
+LSTM (W/O: Glove):
+
 Train Acc: 0.9528
+
 Val Acc: 0.750
+
 Test Acc: 0.745
 
-MAXPOOLINGLSTM
+MAXPOOLINGLSTM:
 
 
-HBMP
+
+
+HBMP:
+

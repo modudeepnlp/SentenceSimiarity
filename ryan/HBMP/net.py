@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from model.embeddings import SentenceEmbedding
+from HBMP.embeddings import SentenceEmbedding
 
 class FCClassifier(tf.keras.Model):
 	"""

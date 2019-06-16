@@ -3,8 +3,8 @@ import sys
 import tensorflow as tf
 from argparse import ArgumentParser
 
-from model.net import NLIModel
-from model.data import get_data
+from HBMP.net import NLIModel
+from util.data import get_data
 import time
 from tqdm import tqdm
 import tempfile
@@ -30,7 +30,7 @@ parser.add_argument("--encoder_type",
                     choices=['BiLSTMMaxPoolEncoder',
                              'LSTMEncoder',
                              'HBMP'],
-                    default='BiLSTMMaxPoolEncoder')
+                    default='LSTMEncoder')
 parser.add_argument("--activation",
                     type=str,
                     choices=['tanh', 'relu', 'leakyrelu'],
@@ -94,38 +94,12 @@ parser.add_argument('--seed',
 parser.add_argument('--max_len',
                     type=int,
                     default=42)
+parser.add_argument('--use_glove',
+                    type=str,
+                    default=False)
 
 
 config = parser.parse_args()
-
-# imdb = tf.keras.datasets.imdb
-# (train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
-#
-# # A dictionary mapping words to an integer index
-# word_index = imdb.get_word_index()
-#
-# # The first indices are reserved
-# word_index = {k:(v+3) for k,v in word_index.items()}
-# word_index["<PAD>"] = 0
-# word_index["<START>"] = 1
-# word_index["<UNK>"] = 2  # unknown
-# word_index["<UNUSED>"] = 3
-#
-# reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
-#
-# def decode_review(text):
-#     return ' '.join([reverse_word_index.get(i, '?') for i in text])
-#
-# train_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
-#                                                         value=word_index["<PAD>"],
-#                                                         padding='post',
-#                                                         maxlen=config.max_len)
-#
-# test_data = tf.keras.preprocessing.sequence.pad_sequences(train_data,
-#                                                         value=word_index["<PAD>"],
-#                                                         padding='post',
-#                                                         maxlen=config.max_len)
-
 
 data_path = 'data/snli/'
 
@@ -164,7 +138,7 @@ _, tmpfn = tempfile.mkstemp()
 # Save the best model during validation and bail out of training early if we're not improving
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                               min_delta=0,
-                              patience=2,
+                              patience=5,
                               verbose=0, mode='auto')
 model_ckpt = tf.keras.callbacks.ModelCheckpoint(tmpfn, save_best_only=True, save_weights_only=True)
 
