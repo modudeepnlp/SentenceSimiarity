@@ -105,7 +105,7 @@ class create_vocab():
         all_words_array = self.__remove_low_frequency_words(all_words_array)
         self.__indexing_vocab(all_words_array)
 
-    def set_data(self, is_existed_save_files, mode):
+    def set_data(self, mode):
         if mode == self.all_mode:
             self.path_list = [config.path_train, config.path_test, config.path_dev]
         elif mode == self.train_mode:
@@ -115,9 +115,9 @@ class create_vocab():
         else:
             self.path_list = [config.path_dev]
 
-        if is_existed_save_files:
-            self.__load_words()
-        else:
+        if config.create_vocab_file_list:
             self.__main_flow()
             self.__save_words()
+        else:
+            self.__load_words()
 

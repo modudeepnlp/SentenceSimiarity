@@ -29,8 +29,7 @@ class Custom_dataset():
         self.path_dev = config.path_dev
 
         custom_vocab = vocab.create_vocab()
-        custom_vocab.set_data(is_existed_save_files=config.create_vocab_file_list, 
-                                mode=config.all_mode)
+        custom_vocab.set_data(mode=config.all_mode)
         self.vocab_list = custom_vocab.vocab_list
         self.word_to_index = custom_vocab.word_to_index
         self.index_to_word = custom_vocab.index_to_word
