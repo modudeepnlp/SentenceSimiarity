@@ -29,7 +29,7 @@ def main(argv):
     tokenizer = MeCab()
     corpus = Corpus(vocab, tokenizer)
 
-    hbmp = HBMP()
+    hbmp = HBMP(vocab_len=len(vocab))
 
     opt = tf.optimizers.Adam(learning_rate=learning_rate)
     loss_fn = tf.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -54,7 +54,6 @@ def main(argv):
             with tf.GradientTape() as tape:
                 logits = hbmp(sen1, sen2)
                 train_loss = loss_fn(label, logits)
-                print(logits)
 
             grads = tape.gradient(target=train_loss, sources=hbmp.trainable_variables)
             opt.apply_gradients(grads_and_vars=zip(grads, hbmp.trainable_variables))
