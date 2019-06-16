@@ -18,3 +18,8 @@
 - dev accuracy :  78.28336148648648 %
 - test accuracy :  77.54434121621621 %
 - config = {epoch:10, batch:256,  learning_rate:0.0005,  embedding_dim:128,  hidden_size:128,  linear_hidden_size:128}
+-
+- (2)
+- dev accuracy :  79.5924831081081 %
+- test accuracy :  78.63175675675676 %
+- config = {epoch:5, batch:256,  learning_rate:0.0005,  embedding_dim:300,  hidden_size:128,  linear_hidden_size:128}
