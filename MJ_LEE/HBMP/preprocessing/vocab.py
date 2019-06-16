@@ -2,6 +2,7 @@ import config as config
 import pickle
 import re
 import collections
+import os
 
 class create_vocab():
     def __init__(self):
@@ -115,9 +116,18 @@ class create_vocab():
         else:
             self.path_list = [config.path_dev]
 
-        if config.create_vocab_file_list:
+        file_list = [config.vocab_list, config.vocab_size, config.word_to_index, config.index_to_word]
+        for file in file_list:
+            if os.path.isfile(file):
+                exist = True
+            else:
+                exist = False
+                break
+
+        if exist: 
+            self.__load_words()
+        else:
             self.__main_flow()
             self.__save_words()
-        else:
-            self.__load_words()
+            
 
