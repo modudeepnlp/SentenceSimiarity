@@ -1,4 +1,5 @@
 ## python main.py 로 실행하면 됩니다.
+- main → vocab → custom_dataset → main → model → main 
 # 2019-06-16 (1)
 - dev accuracy :  76.34762308998302 %
 - test accuracy :  75.67911714770797 %
