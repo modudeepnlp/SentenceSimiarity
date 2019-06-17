@@ -3,7 +3,7 @@
 - https://arxiv.org/pdf/1808.08762.pdf
 - 600D HBMP, paper accuracy : 86.6%
 ## pretain
-- Glove
+- Glove (GloVe 840B 300D, 
 - https://nlp.stanford.edu/projects/glove/
 # 2019-06-16 
 * [ ] 1
