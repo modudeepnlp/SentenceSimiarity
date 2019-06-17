@@ -6,10 +6,8 @@ import nltk
 import os
 import pickle
 import preprocessing.vocab as vocab
-
 from nltk.corpus import stopwords  
 from torch.utils import data
-
 
 class dummy_dataset(data.Dataset):
     def __init__(self, custom_dataset):        
@@ -33,7 +31,6 @@ class Custom_dataset():
         self.vocab_list = custom_vocab.vocab_list
         self.word_to_index = custom_vocab.word_to_index
         self.index_to_word = custom_vocab.index_to_word
-        self.vocab_size = custom_vocab.vocab_size
 
         self.stop_words = stopwords.words('english')
 
