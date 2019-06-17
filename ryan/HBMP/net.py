@@ -45,10 +45,14 @@ class NLIModel(tf.keras.Model):
 	"""
 	NLI 테스크의 Main 모델
 	"""
-	def __init__(self, config):
+	def __init__(self, config, train_embedding=None):
 		super(NLIModel, self).__init__()
+
 		self.config = config
-		self.sentence_embedding = SentenceEmbedding(config)
+		if config.use_glove == True:
+			self.sentence_embedding = SentenceEmbedding(config, train_embedding)
+		else:
+			self.sentence_embedding = SentenceEmbedding(config)
 		self.classifier = FCClassifier(config)
 
 	def call(self, x):

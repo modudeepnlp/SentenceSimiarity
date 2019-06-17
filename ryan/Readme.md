@@ -19,15 +19,13 @@ Train Acc: 0.8568
 Val Acc: 0.7899
 Test Acc: 0.7906
 
-## HBMP
+## HBMP (Hierarchical BiLSTM max pooling)
 
 LSTM (W/O: Glove):
 
-Train Acc: 0.9528
-
-Val Acc: 0.750
-
-Test Acc: 0.745
+549367/549367 [==============================] - 200s 364us/sample - loss: 0.3169 - acc: 0.8807 - val_loss: 0.6576 - val_acc: 0.7758
+9824/9824 [==============================] - 1s 138us/sample - loss: 0.5962 - acc: 0.7768
+Test loss / test accuracy = 0.5962 / 0.7768
 
 MAXPOOLINGLSTM:
 

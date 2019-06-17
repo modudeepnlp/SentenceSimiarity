@@ -5,6 +5,8 @@ from argparse import ArgumentParser
 
 from HBMP.net import NLIModel
 from util.data import get_data
+import numpy as np
+
 import time
 from tqdm import tqdm
 import tempfile
@@ -21,7 +23,7 @@ parser.add_argument("--corpus",
                     default='snli')
 parser.add_argument('--epochs',
                     type=int,
-                    default=10)
+                    default=50)
 parser.add_argument('--batch_size',
                     type=int,
                     default=512)
@@ -30,7 +32,7 @@ parser.add_argument("--encoder_type",
                     choices=['BiLSTMMaxPoolEncoder',
                              'LSTMEncoder',
                              'HBMP'],
-                    default='LSTMEncoder')
+                    default='HBMP')
 parser.add_argument("--activation",
                     type=str,
                     choices=['tanh', 'relu', 'leakyrelu'],
@@ -54,7 +56,7 @@ parser.add_argument('--fc_dim',
                     default=600)
 parser.add_argument('--hidden_dim',
                     type=int,
-                    default=600)
+                    default=300)
 parser.add_argument('--layers',
                     type=int,
                     default=1)
@@ -97,11 +99,18 @@ parser.add_argument('--max_len',
 parser.add_argument('--use_glove',
                     type=str,
                     default=False)
+parser.add_argument('--data_path',
+                    type=str,
+                    default='data/snli/')
+parser.add_argument('--train_embedding',
+                    type=str,
+                    default=True)
+
 
 
 config = parser.parse_args()
 
-data_path = 'data/snli/'
+data_path = config.data_path
 
 training = get_data(data_path + 'snli_1.0_train.jsonl')
 validation = get_data(data_path + 'snli_1.0_dev.jsonl')
@@ -124,10 +133,45 @@ test = prepare_data(test)
 print('Build model...')
 print('Vocab size =', VOCAB)
 
-config.embed_size = VOCAB
+config.vocab_size = VOCAB
 config.out_dim = len(LABELS)
 
-model = NLIModel(config)
+""" Load Glova Embedding """
+GLOVE_STORE = data_path + 'precomputed_glove.weights'
+if config.use_glove:
+    if not os.path.exists(GLOVE_STORE + '.npy'):
+        print('Computing GloVe')
+
+        embeddings_index = {}
+        f = open(data_path + 'glove.840B.300d.txt')
+        # f = open(data_path + 'glove.6B.300d.txt')
+        for line in f:
+            values = line.split(' ')
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        f.close()
+
+        # prepare embedding matrix
+        embedding_matrix = np.zeros((VOCAB, config.embed_dim))
+        for word, i in tokenizer.word_index.items():
+            embedding_vector = embeddings_index.get(word)
+            if embedding_vector is not None:
+                # words not found in embedding index will be all-zeros.
+                embedding_matrix[i] = embedding_vector
+            else:
+                print('Missing from GloVe: {}'.format(word))
+
+        np.save(GLOVE_STORE, embedding_matrix)
+
+    print('Loading GloVe')
+    embedding_matrix = np.load(GLOVE_STORE + '.npy')
+    print('Total number of null word embeddings:')
+    print(np.sum(np.sum(embedding_matrix, axis=1) == 0))
+else:
+    embedding_matrix=None
+
+model = NLIModel(config, embedding_matrix)
 
 model.compile(loss='categorical_crossentropy',
               optimizer=config.optimizer,
@@ -138,7 +182,7 @@ _, tmpfn = tempfile.mkstemp()
 # Save the best model during validation and bail out of training early if we're not improving
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
                               min_delta=0,
-                              patience=5,
+                              patience=3,
                               verbose=0, mode='auto')
 model_ckpt = tf.keras.callbacks.ModelCheckpoint(tmpfn, save_best_only=True, save_weights_only=True)
 

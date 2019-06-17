@@ -2,6 +2,7 @@
 Embedding
 
 """
+import os
 import time
 import numpy as np
 import tensorflow as tf
@@ -9,11 +10,15 @@ from tensorflow.keras import layers
 
 class SentenceEmbedding(tf.keras.Model):
 
-    def __init__(self, config):
+    def __init__(self, config, embedding_matrix=None):
 
         super(SentenceEmbedding, self).__init__()
         self.config = config
-        self.word_embedding = layers.Embedding(config.embed_size, config.embed_dim)
+        if config.use_glove == True:
+            self.word_embedding = layers.Embedding(config.vocab_size, config.embed_dim,
+                                                   weights=[embedding_matrix], trainable=config.train_embedding)
+        else:
+            self.word_embedding = layers.Embedding(config.vocab_size, config.embed_dim)
         self.encoder = eval(config.encoder_type)(config)
 
     def call(self, x):
@@ -61,7 +66,7 @@ class BiLSTMMaxPoolEncoder(tf.keras.Model):
                             )
         self.bidirectional = layers.Bidirectional
 
-        self.max_pool = layers.MaxPool1D(1)
+        self.max_pool = layers.GlobalMaxPool1D()
 
     def call(self, x):
 
@@ -86,7 +91,7 @@ class HBMP(tf.keras.Model):
     def __init__(self, config):
         super(HBMP, self).__init__()
         self.config = config
-        self.max_pool = layers.MaxPool1D(1)
+        self.max_pool = layers.GlobalMaxPool1D()
 
         # self.cells = config.cells
 
@@ -94,32 +99,40 @@ class HBMP(tf.keras.Model):
         self.rnn1 = layers.LSTM(
 	        units=config.hidden_dim,
 	        dropout=config.dropout,
+            return_sequences=True
         )
         self.rnn2 = layers.LSTM(
 	        units=config.hidden_dim,
 	        dropout=config.dropout,
+            return_sequences=True
         )
         self.rnn3 = layers.LSTM(
 	        units=config.hidden_dim,
 	        dropout=config.dropout,
+            return_sequences=True
         )
-        self.bidirectional = layers.Bidirectional
+        self.bidirectional_1 = layers.Bidirectional(self.rnn1)
+        self.bidirectional_2 = layers.Bidirectional(self.rnn2)
+        self.bidirectional_3 = layers.Bidirectional(self.rnn3)
 
     def call(self, x):
 
         emb1 = self.rnn1(x)
-        emb1 = self.bidirectional(emb1)
+        emb1 = self.bidirectional_1(emb1)
         emb1 = self.max_pool(emb1)
 
         emb2 = self.rnn2(x)
-        emb2 = self.bidirectional(emb2)
+        emb2 = self.bidirectional_2(emb2)
         emb2 = self.max_pool(emb2)
 
         emb3 = self.rnn3(x)
-        emb3 = self.bidirectional(emb3)
+        emb3 = self.bidirectional_3(emb3)
         emb3 = self.max_pool(emb3)
 
-        emb = tf.concat([emb1,emb2,emb3], axis=2)
-        emb = emb.squeeze(0)
+        emb = tf.concat([emb1,emb2,emb3], axis=1)
+
+
+        # emb = emb.squeeze(0)
+        # emb = tf.squeeze(emb, axis=0)
 
         return emb
