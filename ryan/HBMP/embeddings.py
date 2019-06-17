@@ -39,15 +39,16 @@ class LSTMEncoder(tf.keras.Model):
     def __init__(self, config):
         super(LSTMEncoder, self).__init__()
         self.config = config
-        self.rnn = layers.LSTM(
+        self.rnn = layers.CuDNNLSTM(
                            units=config.hidden_dim,
-                           dropout=config.dropout
                             )
+        self.dropout = layers.Dropout(config.dropout)
         self.batch_norm = layers.BatchNormalization()
 
     def call(self, x):
 
         embedding = self.rnn(x)
+        embedding = self.dropout(embedding)
         embedding = self.batch_norm(embedding)
 
         return embedding
@@ -60,27 +61,23 @@ class BiLSTMMaxPoolEncoder(tf.keras.Model):
     def __init__(self, config):
         super(BiLSTMMaxPoolEncoder, self).__init__()
         self.config = config
-        self.rnn = layers.LSTM(
+        self.rnn = layers.CuDNNLSTM(
                            units=config.hidden_dim,
-                           dropout=config.dropout,
+                            return_sequences=True
                             )
-        self.bidirectional = layers.Bidirectional
+        self.bidirectional = layers.Bidirectional(self.rnn)
+        self.dropout = layers.Dropout(config.dropout)
 
         self.max_pool = layers.GlobalMaxPool1D()
 
     def call(self, x):
 
-        embedding = self.rnn(x)
-        embedding = self.bidirectional(embedding)
+        embedding = self.bidirectional(x)
+        embedding = self.dropout(embedding)
 
-        print("############3")
-        print(embedding)
-        print("############3")
-        
         # Max pooling
-
         emb = self.max_pool(embedding)
-        emb = emb.squeeze(2)
+
         return emb
 
 
@@ -96,19 +93,16 @@ class HBMP(tf.keras.Model):
         # self.cells = config.cells
 
         self.hidden_dim = config.hidden_dim
-        self.rnn1 = layers.LSTM(
+        self.rnn1 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-	        dropout=config.dropout,
             return_sequences=True
         )
-        self.rnn2 = layers.LSTM(
+        self.rnn2 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-	        dropout=config.dropout,
             return_sequences=True
         )
-        self.rnn3 = layers.LSTM(
+        self.rnn3 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-	        dropout=config.dropout,
             return_sequences=True
         )
         self.bidirectional_1 = layers.Bidirectional(self.rnn1)
@@ -117,20 +111,16 @@ class HBMP(tf.keras.Model):
 
     def call(self, x):
 
-        emb1 = self.rnn1(x)
-        emb1 = self.bidirectional_1(emb1)
+        emb1 = self.bidirectional_1(x)
         emb1 = self.max_pool(emb1)
 
-        emb2 = self.rnn2(x)
-        emb2 = self.bidirectional_2(emb2)
+        emb2 = self.bidirectional_2(x)
         emb2 = self.max_pool(emb2)
 
-        emb3 = self.rnn3(x)
-        emb3 = self.bidirectional_3(emb3)
+        emb3 = self.bidirectional_3(x)
         emb3 = self.max_pool(emb3)
 
         emb = tf.concat([emb1,emb2,emb3], axis=1)
-
 
         # emb = emb.squeeze(0)
         # emb = tf.squeeze(emb, axis=0)

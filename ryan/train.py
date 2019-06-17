@@ -14,7 +14,7 @@ import tempfile
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"  # For TEST
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"  # For TEST
 
 parser = ArgumentParser(description='Helsinki NLI')
 parser.add_argument("--corpus",
@@ -32,7 +32,7 @@ parser.add_argument("--encoder_type",
                     choices=['BiLSTMMaxPoolEncoder',
                              'LSTMEncoder',
                              'HBMP'],
-                    default='HBMP')
+                    default='BiLSTMMaxPoolEncoder')
 parser.add_argument("--activation",
                     type=str,
                     choices=['tanh', 'relu', 'leakyrelu'],
@@ -62,7 +62,7 @@ parser.add_argument('--layers',
                     default=1)
 parser.add_argument('--dropout',
                     type=float,
-                    default=0.1)
+                    default=0.2)
 parser.add_argument('--learning_rate',
                     type=float,
                     default=0.0005)
@@ -98,7 +98,7 @@ parser.add_argument('--max_len',
                     default=42)
 parser.add_argument('--use_glove',
                     type=str,
-                    default=False)
+                    default=True)
 parser.add_argument('--data_path',
                     type=str,
                     default='data/snli/')

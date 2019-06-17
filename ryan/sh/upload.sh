@@ -7,4 +7,4 @@ cd ..
 
 #rsync -avz --exclude=".*" --exclude=".git" ./ irteam@10.108.15.73::R/home1/irteam/ryan/dssm_tf
 
-rsync -avzP --exclude='data_out' --exclude='data/*' --exclude=".git" --exclude="bert_dssm" ./ CompanyAI@10.64.48.154:/home/CompanyAI/ryan/sent_sim
+rsync -avzP --exclude='data_out' --exclude=".git" --exclude="bert_dssm" ./ CompanyAI@10.64.48.154:/home/CompanyAI/ryan/sent_sim
