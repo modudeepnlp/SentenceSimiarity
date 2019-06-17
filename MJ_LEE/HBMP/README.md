@@ -3,7 +3,7 @@
 - https://arxiv.org/pdf/1808.08762.pdf
 - 600D HBMP, paper accuracy : 86.6%
 ## pretain
-- Glove (GloVe 840B 300D, 
+- Glove (glove.840B.300d.zip, 840B tokens, 2.2M vocab, cased, 300d vectors, 2.03 GB)
 - https://nlp.stanford.edu/projects/glove/
 # 2019-06-16 
 * [ ] 1
