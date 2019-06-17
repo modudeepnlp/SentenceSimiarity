@@ -59,14 +59,12 @@ class Classifier(nn.Module):
         dim_size = similarity.shape[1]
         
         fc = self.dense1(similarity)
-        fc = self.relu(fc)
-        # fc = self.leaky_relu(fc)
-        # fc = self.dropout(fc)
+        fc = self.leaky_relu(fc)
+        fc = self.dropout(fc)
  
         fc = self.dense2(fc)
-        fc = self.relu(fc)
-        # fc = self.leaky_relu(fc)
-        # fc = self.dropout(fc)
+        fc = self.leaky_relu(fc)
+        fc = self.dropout(fc)
 
         out = self.dense3(fc)
         

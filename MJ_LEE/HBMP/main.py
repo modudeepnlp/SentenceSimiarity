@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import custom_dataset as custom_dataset
+import preprocessing.custom_dataset as custom_dataset
 import model as model
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
@@ -56,8 +56,8 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             step += 1
-            if n % 50 == 0:
-                print(n , " loss : ", loss)
+            if n % 100 == 0:
+                print(n , " loss : ", loss.item())
                 step_list.append(step)
                 loss_list.append(loss)
       
@@ -66,11 +66,8 @@ if __name__ == "__main__":
     plt.xlabel('Step')
     plt.ylabel('Loss')
     plt.show()
-
-
-
-    # 평가
-    print("dev eval")
+    
+    ############################################################## eval_dev
     total = 0
     correct = 0
     for n, (label, sent1, sent2) in enumerate(dev_loader):
@@ -81,20 +78,9 @@ if __name__ == "__main__":
         _, pred = torch.max(out.data, 1)
         total += label.size(0) # batch size
         correct += (pred == label).sum() 
-
-        if n == 10:
-            break
-        else:
-            print(pred)
-            print(label)
-            print("------------------------")
-
     print("dev accuracy : " , 100 * (correct.cpu().numpy()/total), "%")
 
-
-
-    # 평가
-    print("test eval")
+    ############################################################## eval_test
     total = 0
     correct = 0
     for n, (label, sent1, sent2) in enumerate(test_loader):
@@ -105,15 +91,7 @@ if __name__ == "__main__":
         _, pred = torch.max(out.data, 1)
         total += label.size(0) # batch size
         correct += (pred == label).sum() 
-
-        if n == 10:
-            break
-        else:
-            print(pred)
-            print(label)
-            print("------------------------")
-
-    # correct 는 gpu 에 있는 pred 과 label 을 사용하기에 다시 cpu로 가져와야한다
     print("test accuracy : " , 100 * (correct.cpu().numpy()/total), "%")
+    # correct 는 gpu 에 있는 pred 과 label 을 사용하기에 다시 cpu로 가져와야한다
 
     
