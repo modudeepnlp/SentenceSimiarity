@@ -6,10 +6,6 @@ import os
 
 class create_vocab():
     def __init__(self):
-        self.train_mode = config.train_mode
-        self.test_mode = config.test_mode 
-        self.dev_mode = config.dev_mode
-        self.all_mode = config.all_mode
         self.UNK = config.UNK
         self.PAD = config.PAD
         self.labels = config.labels
@@ -107,11 +103,11 @@ class create_vocab():
         self.__indexing_vocab(all_words_array)
 
     def set_data(self, mode):
-        if mode == self.all_mode:
+        if mode == config.all_mode:
             self.path_list = [config.path_train, config.path_test, config.path_dev]
-        elif mode == self.train_mode:
+        elif mode == config.train_mode:
             self.path_list = [config.path_train]
-        elif mode == self.test_mode:
+        elif mode == config.test_mode:
             self.path_list = [config.path_test]
         else:
             self.path_list = [config.path_dev]
