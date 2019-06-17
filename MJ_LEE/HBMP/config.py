@@ -3,14 +3,15 @@ epoch = 10
 batch = 256
 learning_rate = 0.0005
 
-embedding_dim = 64
-hidden_size = 64
-linear_hidden_size = 64
+embedding_dim = 300
+hidden_size = 128
+linear_hidden_size = 128
 
 ## option
 use_stop_word = False
 use_UNK = False
 use_remove_low_freq = False
+use_gensim = True
 
 low_freq = 2
 max_seq = 21
@@ -35,6 +36,8 @@ path = "../../data/snli_1.0/"
 path_train = path + "snli_1.0_train.txt"
 path_test = path + "snli_1.0_test.txt"
 path_dev = path + "snli_1.0_dev.txt"
+glove = "../../data/glove.840B.300d.txt"
+glove_npy = folder + "glove.npy"
 labels = ["neutral", "contradiction", "entailment"] 
 UNK = "[UNK]"
 PAD = "[PAD]"
