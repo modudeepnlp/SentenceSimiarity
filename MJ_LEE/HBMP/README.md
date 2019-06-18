@@ -32,3 +32,6 @@
 - dev accuracy :  79.6241554054054 %
 - test accuracy :  79.05405405405406 %
 - config = {epoch:2, batch:256,  learning_rate:0.0005,  embedding_dim:300,  hidden_size:128,  linear_hidden_size:128}
+# 2019-06-18
+- dev accuracy :  84.62 %
+- test accuracy :  84.9 %
