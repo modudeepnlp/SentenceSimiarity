@@ -1,95 +1,105 @@
-"""
-학습할 데이터을 읽어 들인다.
-"""
-from vocab import strip_string
-import numpy as np
 import pandas as pd
+import gluonnlp as nlp
+import numpy as np
+import pickle
+
 
 # label index 정의
 label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
 
 
-"""
-pickle로 vocab 로드
-"""
-def load_vocab(file="data/vocab.txt"):
-    vocab = {}
-    index = 0
-    with open(file, "r") as f:
-        for token in f:
-            vocab[token.strip()] = index
-            index += 1
-    return vocab
+regxs = list("[@_!#$%^&*()<>?/\|}{~:]'\".,-;`+=")
+def strip_string(string):
+    for regx in regxs:
+        string = string.replace(regx, " " + regx + " ")
+    return string.lower().strip()
 
 
-"""
-파일로 부터 vocab을 이용해 데이터 로드
-"""
-def load_data(file, vocab):
+def build_text(file):
+    dataset = pd.read_csv(file, sep="\t")
+
     gold_label = []
     sentence1 = []
+    length1 = 0
     sentence2 = []
-
-    dataset = pd.read_csv(file, sep="\t")
+    length2 = 0
     for i, row in dataset.iterrows():
         if row['gold_label'] == "-" or pd.isnull(row['sentence1']) or pd.isnull(row['sentence2']):
             continue
 
         gold_label.append(label_dict[row['gold_label']])
 
-        line1 = []
-        for token in strip_string(row['sentence1']).split():
-            line1.append(vocab[token])
-        while len(line1) < 82:
-            line1.append(1) # <pad>
+        line1 = strip_string(row['sentence1']).split()
         sentence1.append(line1)
+        length1 = max(length1, len(line1))
 
-        line2 = []
-        for token in strip_string(row['sentence2']).split():
-            line2.append(vocab[token])
-        while len(line2) < 63:
-            line2.append(1) # <pad>
+        line2 = strip_string(row['sentence2']).split()
         sentence2.append(line2)
+        length2 = max(length2, len(line2))
     
-    return gold_label, sentence1, sentence2
+    return gold_label, sentence1, length1, sentence2, length2
 
 
-"""
-테스트 스크립트
-"""
-def zero_count(labels):
-    zero_count = 0
-    for label in labels:
-        if label == 0:
-            zero_count += 1
-    return zero_count
+def build_vocab(texts):
+    tokens = []
+    for text in texts:
+        for line in text:
+            tokens.extend(line)
 
-def sentence_len(sentence):
-    len_sentence = 0
-    for sss in sentence:
-        len_sentence = max(len_sentence, len(sss))
-    return len_sentence
+    counter = nlp.data.count_tokens(tokens)
+    vocab = nlp.Vocab(counter, bos_token=None, eos_token=None, min_freq=1)
 
-def main():
-    vocab = load_vocab()
-    print("vocab size: {}".format(len(vocab)))
+    return vocab
 
-    train_labe, train_sentence1, train_sentence2 = load_data("data/snli_1.0/snli_1.0_train.txt", vocab)
-    print("train zero: {} / {}".format(zero_count(train_labe), len(train_labe)))
-    print("train sentence1: {}".format(sentence_len(train_sentence1)))
-    print("train sentence2: {}".format(sentence_len(train_sentence2)))
 
-    dev_labe, dev_sentence1, dev_sentence2 = load_data("data/snli_1.0/snli_1.0_dev.txt", vocab)
-    print("dev zero: {} / {}".format(zero_count(dev_labe), len(dev_labe)))
-    print("dev sentence1: {}".format(sentence_len(dev_sentence1)))
-    print("dev sentence2: {}".format(sentence_len(dev_sentence2)))
+def text_to_data(vocab, text, length):
+    data = []
+    for line in text:
+        line_data = []
+        for token in line:
+            if token in vocab:
+                line_data.append(vocab[token])
+            else:
+                line_data.append(vocab["<unk>"])
+        line_data.extend([1] * (length - len(line_data)))
+        data.append(line_data)
 
-    test_labe, test_sentence1, test_sentence2 = load_data("data/snli_1.0/snli_1.0_test.txt", vocab)
-    print("dev zero: {} / {}".format(zero_count(test_labe), len(test_labe)))
-    print("dev sentence1: {}".format(sentence_len(test_sentence1)))
-    print("dev sentence2: {}".format(sentence_len(test_sentence2)))
+    return data
+
+
+def dump_data(train, valid, test, save):
+    train_label, train_sentence1, train_length1, train_sentence2, train_length2 = build_text(train)
+    valid_label, valid_sentence1, valid_length1, valid_sentence2, valid_length2 = build_text(valid)
+    test_label, test_sentence1, test_length1, test_sentence2, test_length2 = build_text(test)
+    length = max(train_length1, train_length2, valid_length1, valid_length2, test_length1, test_length2)
+
+    vocab = build_vocab([train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2])
+
+    vocab_fw = {}
+    vocab_bw = {}
+    index = 0
+    for token in vocab.idx_to_token:
+        vocab_fw[token] = index
+        vocab_bw[index] = token
+        index += 1
+
+    train_sentence1 = np.array(text_to_data(vocab_fw, train_sentence1, length))
+    train_sentence2 = np.array(text_to_data(vocab_fw, train_sentence2, length))
+    valid_sentence1 = np.array(text_to_data(vocab_fw, valid_sentence1, length))
+    valid_sentence2 = np.array(text_to_data(vocab_fw, valid_sentence2, length))
+    test_sentence1 = np.array(text_to_data(vocab_fw, test_sentence1, length))
+    test_sentence2 = np.array(text_to_data(vocab_fw, test_sentence2, length))
+
+    with open(save, 'wb') as f:
+        pickle.dump((vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2), f)
+
+
+def load_data(file):
+    with open(file, 'rb') as f:
+        vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = pickle.load(f)
+    return vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2
 
 
 if __name__ == "__main__":
-    main()
+    dump_data("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/snli_data.pkl")
 

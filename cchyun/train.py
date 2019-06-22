@@ -1,14 +1,23 @@
 import data
-import model
+import hbmp
+import pickle
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import copy
+from datetime import datetime
+import logging
 
 import torch
 import torch.utils.data
 
 
-def build_tensor(label, sentence1, sentence2, device, batch_size=256):
+class SNLIConfig(dict): 
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+
+
+def build_tensor(label, sentence1, sentence2, device, batch_size):
     torch_labe = torch.tensor(label, dtype=torch.long).to(device)
     torch_sentence1 = torch.tensor(sentence1, dtype=torch.long).to(device)
     torch_sentence2 = torch.tensor(sentence2, dtype=torch.long).to(device)
@@ -17,26 +26,8 @@ def build_tensor(label, sentence1, sentence2, device, batch_size=256):
     return loader
 
 
-def main():
-    # cuda or cpu
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-
-    vocab = data.load_vocab("data/vocab.txt")
-    print("load_vocab .......................... %d" % len(vocab))
-    train_labe, train_sentence1, train_sentence2 = data.load_data("data/snli_1.0/snli_1.0_train.txt", vocab)
-    # train_labe, train_sentence1, train_sentence2 = data.load_data("data/snli_1.0/snli_1.0_test.txt", vocab) ## fast test only
-    print("load_data train ..................... %d" % len(train_labe))
-    dev_labe, dev_sentence1, dev_sentence2 = data.load_data("data/snli_1.0/snli_1.0_dev.txt", vocab)
-    print("load_data dev ....................... %d" % len(dev_labe))
-    test_labe, test_sentence1, test_sentence2 = data.load_data("data/snli_1.0/snli_1.0_test.txt", vocab)
-    print("load_data test ...................... %d" % len(test_labe))
-
-    config = model.SNLIConfig({
-        "device": device, # cpu 또는 gpu 사용
-        "n_embed": len(vocab), "d_embed": 32, "n_output": 3, "n_epoch": 10, "n_batch": 256,
-        "n_layer": 1, "cells": 2, "dropout": 0.1 ## HBMP
-    })
-    snli = model.SNLI(config=config)
+def train_model(config, train_loader, valid_loader, test_loader, log=True):
+    snli = hbmp.SNLI(config=config)
     snli.to(config.device)
 
     seed = 1029
@@ -45,15 +36,15 @@ def main():
     torch.backends.cudnn.deterministic = True
 
     loss_fn = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(snli.parameters(), lr=0.01)
-
-    train_loader = build_tensor(train_labe, train_sentence1, train_sentence2, config.device, config.n_batch)
-    dev_loader = build_tensor(dev_labe, dev_sentence1, dev_sentence2, config.device, config.n_batch)
-    test_loader = build_tensor(test_labe, test_sentence1, test_sentence2, config.device, config.n_batch)
+    optimizer = torch.optim.Adam(snli.parameters(), lr=config.learning_rate)
 
     epochs = []
-    dev_score = []
+    valid_score = []
     test_score = []
+
+    min_loss = 100
+    max_dev = 0
+    max_test = 0
 
     for epoch in range(config.n_epoch):
         epochs.append(epoch + 1)
@@ -69,6 +60,7 @@ def main():
             optimizer.zero_grad()
 
             pred_label = snli(batch_sentence1, batch_sentence2)
+            print("{} : {}".format(batch_label.size(), pred_label.size()))
             loss = loss_fn(pred_label, batch_label)
             loss.backward()
             optimizer.step()
@@ -80,38 +72,79 @@ def main():
         #
         # dev evaluate
         #
-        dev_match = np.zeros((len(dev_labe)))
-        for i, value in enumerate(dev_loader, 0):
+        valid_match = []
+        for i, value in enumerate(valid_loader, 0):
             batch_label, batch_sentence1, batch_sentence2 = value
             pred_label = snli(batch_sentence1, batch_sentence2)
             _, indices = pred_label.max(1)
             match = torch.eq(indices, batch_label).detach()
-            dev_match[i * config.n_batch:(i+1) * config.n_batch] = match.cpu()
-        dev_accuracy = np.sum(dev_match) * 100 / len(dev_match)
-        dev_score.append(dev_accuracy)
+            valid_match.extend(match.cpu())
+        valid_accuracy = np.sum(valid_match) * 100 / len(valid_match)
+        valid_score.append(valid_accuracy)
 
         #
         # test evaluate
         #
-        test_match = np.zeros((len(test_labe)))
+        test_match = []
         for i, value in enumerate(test_loader, 0):
             batch_label, batch_sentence1, batch_sentence2 = value
             pred_label = snli(batch_sentence1, batch_sentence2)
             _, indices = pred_label.max(1)
             match = torch.eq(indices, batch_label).detach()
-            test_match[i * config.n_batch:(i+1) * config.n_batch] = match.cpu()
+            test_match.extend(match.cpu())
         test_accuracy = np.sum(test_match) * 100 / len(test_match)
         test_score.append(test_accuracy)
         
-        print("[%d], loss: %.3f, dev: %.3f, test: %.3f" % (epoch + 1, train_loss, dev_accuracy, test_accuracy))
+        min_loss = min(min_loss, train_loss)
+        max_dev = max(max_dev, valid_accuracy)
+        max_test = max(max_test, test_accuracy)
+        if log:
+            logging.warning("[%2d], loss: %.3f, dev: %.3f, test: %.3f" % (epoch + 1, train_loss, valid_accuracy, test_accuracy))
+    
+    del snli
 
-
-    df = pd.DataFrame(data=np.array([dev_score, test_score]), columns=epochs, index=["dev", "test"])
-    print(df)
-
-    # plt.plot(epochs, dev_score, label='dev')
+    # if log:
+    #     df = pd.DataFrame(data=np.array([valid_score, test_score]), columns=epochs, index=["dev", "test"])
+    #     logging.warning(df)
+    # plt.plot(epochs, valid_score, label='dev')
     # plt.plot(epochs, test_score, label='test')
     # plt.show()
+
+    return min_loss, max_dev, max_test
+    
+
+def main():
+    vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
+
+    # cuda or cpu
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+    config = SNLIConfig({
+        "device": device, # cpu 또는 gpu 사용
+        "n_vocab": len(vocab_fw), "d_embed": 300, "d_hidden": 600, "n_output": 3, "n_epoch": 20, "n_batch": 64, "learning_rate": 0.0005,
+        "n_layer": 1, "dropout": 0.1 ## HBMP
+    })
+
+    train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
+    # train_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
+    valid_loader = build_tensor(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
+    test_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
+
+
+    configs = []
+    configs.append(config)
+    # for n_embed in range(32, 1024, 32):
+    #     c = copy.deepcopy(config)
+    #     c["n_embed"] = n_embed
+    #     configs.append(model.SNLIConfig(c))
+
+    timestamp = datetime.today().strftime("%Y%m%d%H%M%S")
+    logging.basicConfig(filename='log/train-{}.log'.format(timestamp), format='%(asctime)s %(message)s', level=logging.DEBUG)
+    logging.getLogger().addHandler(logging.StreamHandler())
+
+    for config in configs:
+        logging.warning("{}".format(config))
+        train_loss, valid_accuracy, test_accuracy = train_model(config, train_loader, valid_loader, test_loader)
+        logging.warning("loss: %.3f, dev: %.3f, test: %.3f" % (train_loss, valid_accuracy, test_accuracy))
 
 
 if __name__ == "__main__":
