@@ -4,7 +4,7 @@ from HBMP.embeddings import SentenceEmbedding
 
 class FCClassifier(tf.keras.Model):
 	"""
-	Natural Language Inference with Hierarchical BiLSTM Max Pooling Architecture (HBMP)
+	Directional Self-Attention Network for RNN/CNN-Free Language Understanding
 	"""
 	def __init__(self, config):
 		super(FCClassifier, self).__init__()

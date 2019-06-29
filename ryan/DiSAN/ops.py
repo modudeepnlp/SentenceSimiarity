@@ -8,6 +8,34 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
+class DiSA(tf.keras.Model):
+
+    def __init__(self, config, direction):
+        super(DiSA, self).__init__()
+
+        self.d_e = config.d_e
+        self.d_h = config.d_h
+        self.direction = direction
+        self.dropout_rate = config.dropout
+        self.device = config.device
+
+        self.fc = layers.Dense(config.d_h)
+
+        self.w_1 = layers.Dense(config.d_h)
+        self.w_2 = layers.Dense(config.d_h)
+
+
+        self.elu = layers.elu()
+        self.softmax = layers.softmax(dim=-2)
+        self.dropout = layers.Dropout(dropout)
+
+    def call(self, x, rep_mask):
+        
+
+
+
+
+
 class SentenceEmbedding(tf.keras.Model):
 
     def __init__(self, config, embedding_matrix=None):

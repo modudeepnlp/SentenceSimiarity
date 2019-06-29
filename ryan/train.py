@@ -14,7 +14,7 @@ import tempfile
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"  # For TEST
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # For TEST
 
 parser = ArgumentParser(description='Helsinki NLI')
 parser.add_argument("--corpus",

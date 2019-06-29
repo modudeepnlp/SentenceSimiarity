@@ -95,15 +95,18 @@ class HBMP(tf.keras.Model):
         self.hidden_dim = config.hidden_dim
         self.rnn1 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-            return_sequences=True
+            return_sequences=True,
+            return_state=True
         )
         self.rnn2 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-            return_sequences=True
+            return_sequences=True,
+            return_state=True
         )
         self.rnn3 = layers.CuDNNLSTM(
 	        units=config.hidden_dim,
-            return_sequences=True
+            return_sequences=True,
+            return_state=True
         )
         self.bidirectional_1 = layers.Bidirectional(self.rnn1)
         self.bidirectional_2 = layers.Bidirectional(self.rnn2)
@@ -114,10 +117,10 @@ class HBMP(tf.keras.Model):
         emb1 = self.bidirectional_1(x)
         emb1 = self.max_pool(emb1)
 
-        emb2 = self.bidirectional_2(x)
+        emb2 = self.bidirectional_2(emb2)
         emb2 = self.max_pool(emb2)
 
-        emb3 = self.bidirectional_3(x)
+        emb3 = self.bidirectional_3(emb3)
         emb3 = self.max_pool(emb3)
 
         emb = tf.concat([emb1,emb2,emb3], axis=1)
