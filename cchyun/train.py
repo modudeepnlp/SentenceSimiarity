@@ -1,5 +1,3 @@
-import data
-import hbmp
 import pickle
 import numpy as np
 import pandas as pd
@@ -8,13 +6,12 @@ import copy
 from datetime import datetime
 import logging
 
+import data
+import config as cfg
+import disan
+
 import torch
 import torch.utils.data
-
-
-class SNLIConfig(dict): 
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
 
 
 def build_tensor(label, sentence1, sentence2, device, batch_size):
@@ -27,7 +24,7 @@ def build_tensor(label, sentence1, sentence2, device, batch_size):
 
 
 def train_model(config, train_loader, valid_loader, test_loader, log=True):
-    snli = hbmp.SNLI(config=config)
+    snli = disan.SNLI(config=config)
     snli.to(config.device)
 
     seed = 1029
@@ -60,7 +57,6 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
             optimizer.zero_grad()
 
             pred_label = snli(batch_sentence1, batch_sentence2)
-            print("{} : {}".format(batch_label.size(), pred_label.size()))
             loss = loss_fn(pred_label, batch_label)
             loss.backward()
             optimizer.step()
@@ -114,28 +110,22 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
     
 
 def main():
-    vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
+    config = cfg.Config.load("config.disan.json")
 
+    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
+ 
     # cuda or cpu
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
-    config = SNLIConfig({
-        "device": device, # cpu 또는 gpu 사용
-        "n_vocab": len(vocab_fw), "d_embed": 300, "d_hidden": 600, "n_output": 3, "n_epoch": 20, "n_batch": 64, "learning_rate": 0.0005,
-        "n_layer": 1, "dropout": 0.1 ## HBMP
-    })
+    config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    config.n_vocab = len(vocab)
+    config.i_pad = vocab["<pad>"]
 
     train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
     # train_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
     valid_loader = build_tensor(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
     test_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
 
-
     configs = []
     configs.append(config)
-    # for n_embed in range(32, 1024, 32):
-    #     c = copy.deepcopy(config)
-    #     c["n_embed"] = n_embed
-    #     configs.append(model.SNLIConfig(c))
 
     timestamp = datetime.today().strftime("%Y%m%d%H%M%S")
     logging.basicConfig(filename='log/train-{}.log'.format(timestamp), format='%(asctime)s %(message)s', level=logging.DEBUG)

@@ -94,3 +94,9 @@
   - dev:  82.0
   - test: 81.6
 
+
+# 2019-07-03 - DiSAN
+  - config: { 'n_vocab': 33797, 'd_embed': 300, 'd_hidden': 300, 'n_output': 3, 'n_epoch': 20, 'n_batch': 64, 'learning_rate': 0.0005, 'dropout': 0.1, 'n_layer': 1, 'i_pad': 0}
+  - dev: 82.087
+  - test: 81.749
+

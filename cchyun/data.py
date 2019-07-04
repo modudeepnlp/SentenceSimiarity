@@ -1,5 +1,5 @@
 import pandas as pd
-import gluonnlp as nlp
+import collections
 import numpy as np
 import pickle
 
@@ -46,9 +46,12 @@ def build_vocab(texts):
         for line in text:
             tokens.extend(line)
 
-    counter = nlp.data.count_tokens(tokens)
-    vocab = nlp.Vocab(counter, bos_token=None, eos_token=None, min_freq=1)
-
+    counter = collections.Counter(tokens)
+    vocab = { "<pad>": 0, "<unk>": 1, "<bos>": 2, "<eos>": 3 }
+    index = 4
+    for key, _ in counter.items():
+        vocab[key] = index
+        index += 1
     return vocab
 
 
@@ -61,7 +64,7 @@ def text_to_data(vocab, text, length):
                 line_data.append(vocab[token])
             else:
                 line_data.append(vocab["<unk>"])
-        line_data.extend([1] * (length - len(line_data)))
+        line_data.extend([vocab["<pad>"]] * (length - len(line_data)))
         data.append(line_data)
 
     return data
@@ -75,29 +78,21 @@ def dump_data(train, valid, test, save):
 
     vocab = build_vocab([train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2])
 
-    vocab_fw = {}
-    vocab_bw = {}
-    index = 0
-    for token in vocab.idx_to_token:
-        vocab_fw[token] = index
-        vocab_bw[index] = token
-        index += 1
-
-    train_sentence1 = np.array(text_to_data(vocab_fw, train_sentence1, length))
-    train_sentence2 = np.array(text_to_data(vocab_fw, train_sentence2, length))
-    valid_sentence1 = np.array(text_to_data(vocab_fw, valid_sentence1, length))
-    valid_sentence2 = np.array(text_to_data(vocab_fw, valid_sentence2, length))
-    test_sentence1 = np.array(text_to_data(vocab_fw, test_sentence1, length))
-    test_sentence2 = np.array(text_to_data(vocab_fw, test_sentence2, length))
+    train_sentence1 = np.array(text_to_data(vocab, train_sentence1, length))
+    train_sentence2 = np.array(text_to_data(vocab, train_sentence2, length))
+    valid_sentence1 = np.array(text_to_data(vocab, valid_sentence1, length))
+    valid_sentence2 = np.array(text_to_data(vocab, valid_sentence2, length))
+    test_sentence1 = np.array(text_to_data(vocab, test_sentence1, length))
+    test_sentence2 = np.array(text_to_data(vocab, test_sentence2, length))
 
     with open(save, 'wb') as f:
-        pickle.dump((vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2), f)
+        pickle.dump((vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2), f)
 
 
 def load_data(file):
     with open(file, 'rb') as f:
-        vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = pickle.load(f)
-    return vocab_fw, vocab_bw, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2
+        vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = pickle.load(f)
+    return vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2
 
 
 if __name__ == "__main__":
