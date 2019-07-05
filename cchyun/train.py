@@ -8,7 +8,8 @@ import logging
 
 import data
 import config as cfg
-import disan
+import hbmp
+import transformer
 
 import torch
 import torch.utils.data
@@ -24,7 +25,8 @@ def build_tensor(label, sentence1, sentence2, device, batch_size):
 
 
 def train_model(config, train_loader, valid_loader, test_loader, log=True):
-    snli = disan.SNLI(config=config)
+    # snli = hbmp.SNLI(config=config)
+    snli = transformer.SNLI(config=config)
     snli.to(config.device)
 
     seed = 1029
@@ -33,7 +35,10 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
     torch.backends.cudnn.deterministic = True
 
     loss_fn = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(snli.parameters(), lr=config.learning_rate)
+    # optimizer = torch.optim.Adam(snli.parameters(), lr=config.learning_rate)
+    optimizer = transformer.ScheduledOptim(
+        torch.optim.Adam(filter(lambda x: x.requires_grad, snli.parameters()), betas=(0.9, 0.98), eps=1e-09),
+        config.d_embed, 4000)
 
     epochs = []
     valid_score = []
@@ -59,7 +64,8 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
             pred_label = snli(batch_sentence1, batch_sentence2)
             loss = loss_fn(pred_label, batch_label)
             loss.backward()
-            optimizer.step()
+            # optimizer.step()
+            optimizer.step_and_update_lr()
 
             train_loss += loss.item()
         train_loss = train_loss / len(train_loader)
@@ -110,13 +116,18 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
     
 
 def main():
-    config = cfg.Config.load("config.disan.json")
+    # config = cfg.Config.load("config.hbmp.json")
+    config = cfg.Config.load("config.transformer.json")
 
     vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
  
     # cuda or cpu
     config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    config.n_vocab = len(vocab)
+    # config.n_vocab = len(vocab)
+    config.n_enc_vocab = len(vocab)
+    config.n_dec_vocab = len(vocab)
+    config.n_enc_seq = max(len(train_sentence1[0]), len(train_sentence2[0]))
+    config.n_dec_seq = max(len(train_sentence1[0]), len(train_sentence2[0]))
     config.i_pad = vocab["<pad>"]
 
     train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
