@@ -4,6 +4,7 @@ import tensorflow as tf
 from argparse import ArgumentParser
 
 from HBMP.net import NLIModel
+from DiSAN.net import NN4SNLI
 from util.data import get_data
 import numpy as np
 
@@ -16,6 +17,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # For TEST
 
+# for HBMP
 parser = ArgumentParser(description='Helsinki NLI')
 parser.add_argument("--corpus",
                     type=str,
@@ -60,12 +62,12 @@ parser.add_argument('--hidden_dim',
 parser.add_argument('--layers',
                     type=int,
                     default=1)
-parser.add_argument('--dropout',
-                    type=float,
-                    default=0.2)
-parser.add_argument('--learning_rate',
-                    type=float,
-                    default=0.0005)
+# parser.add_argument('--dropout',
+#                     type=float,
+#                     default=0.2)
+# parser.add_argument('--learning_rate',
+#                     type=float,
+#                     default=0.0005)
 parser.add_argument('--lr_patience',
                     type=int,
                     default=1)
@@ -98,7 +100,7 @@ parser.add_argument('--max_len',
                     default=42)
 parser.add_argument('--use_glove',
                     type=str,
-                    default=True)
+                    default=False)
 parser.add_argument('--data_path',
                     type=str,
                     default='data/snli/')
@@ -106,9 +108,21 @@ parser.add_argument('--train_embedding',
                     type=str,
                     default=True)
 
-
+# for DiSAN
+parser.add_argument('--batch-size', default=32, type=int)
+parser.add_argument('--data-type', default='SNLI')
+parser.add_argument('--dropout', default=0.25, type=float)
+parser.add_argument('--epoch', default=40, type=int)
+parser.add_argument('--gpu', default=0, type=int)
+parser.add_argument('--learning-rate', default=0.5, type=float)
+parser.add_argument('--print-freq', default=3000, type=int)
+parser.add_argument('--weight-decay', default=5e-5, type=float)
+parser.add_argument('--word-dim', default=300, type=int)
+parser.add_argument('--d-e', default=300, type=int)
+parser.add_argument('--d-h', default=300, type=int)
 
 config = parser.parse_args()
+args = parser.parse_args()
 
 data_path = config.data_path
 
@@ -171,7 +185,9 @@ if config.use_glove:
 else:
     embedding_matrix=None
 
-model = NLIModel(config, embedding_matrix)
+# model = NLIModel(config, embedding_matrix)
+model = NN4SNLI(config, embedding_matrix)
+
 
 model.compile(loss='categorical_crossentropy',
               optimizer=config.optimizer,
