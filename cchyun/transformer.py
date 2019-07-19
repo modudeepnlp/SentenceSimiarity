@@ -26,8 +26,7 @@ def get_sinusoid_encoding_table(n_seq, d_embed):
 def get_attn_pad_mask(seq_q, seq_k, i_pad):
     batch_size, len_q = seq_q.size()
     batch_size, len_k = seq_k.size()
-    pad_attn_mask = seq_k.data.eq(i_pad
-    ).unsqueeze(1).expand(batch_size, len_q, len_k)  # <pad>
+    pad_attn_mask = seq_k.data.eq(i_pad).unsqueeze(1).expand(batch_size, len_q, len_k)  # <pad>
     return pad_attn_mask.byte()
 
 
@@ -273,23 +272,22 @@ class SNLI(nn.Module):
         self.config = config
 
         self.encoder = Encoder(self.config)
-        self.max_pool = nn.AdaptiveMaxPool1d(1)
+        # self.max_pool = nn.AdaptiveMaxPool1d(1)
         self.dropout1 = nn.Dropout(p=config.dropout)
-        self.layout1 = nn.Linear(config.n_enc_seq * 4, config.d_ff)
+        self.layout1 = nn.Linear(config.n_enc_seq * config.d_embed * 4, config.d_ff * 2)
         self.dropout2 = nn.Dropout(p=config.dropout)
-        self.layout2 = nn.Linear(config.d_ff, config.d_ff // 4)
-        self.layout3 = nn.Linear(config.d_ff // 4, config.n_output)
+        self.layout2 = nn.Linear(config.d_ff * 2, config.d_ff)
+        self.layout3 = nn.Linear(config.d_ff, config.n_output)
     
     def forward(self, sentence1, sentence2):
-        # (bs, n_enc_seq, d_embed)
+        # (bs, n_enc_seq, d_embed) -> (bs, n_enc_seq * d_embed)
         sentence1_ctx, _ = self.encoder(sentence1)
-        sentence1_ctx = self.max_pool(sentence1_ctx)
+        sentence1_ctx = sentence1_ctx.view(sentence1_ctx.size()[0], -1)
         sentence2_ctx, _ = self.encoder(sentence2)
-        sentence2_ctx = self.max_pool(sentence2_ctx)
+        sentence2_ctx = sentence2_ctx.view(sentence2_ctx.size()[0], -1)
 
-        # (bs, n_enc_seq * 4, 1)
+        # (bs, n_enc_seq * d_embed * 4)
         output = torch.cat([sentence1_ctx, sentence2_ctx, torch.abs(sentence1_ctx - sentence2_ctx), sentence1_ctx * sentence2_ctx], 1)
-        output = output.squeeze()
 
         output = self.dropout1(output)
         output = F.relu(self.layout1(output))

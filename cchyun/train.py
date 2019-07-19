@@ -20,7 +20,7 @@ def build_tensor(label, sentence1, sentence2, device, batch_size):
     torch_sentence1 = torch.tensor(sentence1, dtype=torch.long).to(device)
     torch_sentence2 = torch.tensor(sentence2, dtype=torch.long).to(device)
     dataset = torch.utils.data.TensorDataset(torch_labe, torch_sentence1, torch_sentence2)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
     return loader
 
 
@@ -62,6 +62,8 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
             optimizer.zero_grad()
 
             pred_label = snli(batch_sentence1, batch_sentence2)
+            _, indices = pred_label.max(1)
+            # print(indices)
             loss = loss_fn(pred_label, batch_label)
             loss.backward()
             # optimizer.step()
@@ -122,7 +124,7 @@ def main():
     vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
  
     # cuda or cpu
-    config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
