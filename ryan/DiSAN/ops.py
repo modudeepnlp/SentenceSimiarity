@@ -8,6 +8,22 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 
+class SentenceEmbedding(tf.keras.Model):
+
+    def __init__(self, config, embedding_matrix=None):
+
+        super(SentenceEmbedding, self).__init__()
+        self.config = config
+        if config.use_glove == True:
+            self.word_embedding = layers.Embedding(config.vocab_size, config.embed_dim,
+                                                   weights=[embedding_matrix], trainable=config.train_embedding)
+        else:
+            self.word_embedding = layers.Embedding(config.vocab_size, config.embed_dim)
+
+    def call(self, x):
+        sentence = self.word_embedding(x)
+        return sentence
+
 
 def masked_softmax(vec, mask, dim=1):
     masked_vec = vec * mask
@@ -28,23 +44,22 @@ def get_direct_mask_tile(direction, seq_len, device):
     :return:
     """
 
-	if direction == 'fw':
-		mask = layers.triu(mask, diagonal=1)
-	elif direction == 'bw':
-		mask = layers.tril(mask, diagonal=-1)
-	else:
-		raise NotImplementedError('only forward or backward mask is allowed!')
-	mask.unsqueeze_(0)
-	return mask
+    if direction == 'fw':
+        mask = layers.triu(mask, diagonal=1)
+    elif direction == 'bw':
+        mask = layers.tril(mask, diagonal=-1)
+    else:
+        raise NotImplementedError('only forward or backward mask is allowed!')
+    mask.unsqueeze_(0)
+    return mask
 
+def get_rep_mask_tile(rep_mask):
 
-def get_rep_mask_tile(rep_mask, device):
+    batch_size, seq_len = rep_mask.size()
 
-	batch_size, seq_len = rep_mask.size()
+    mask = rep_mask.unsqueeze(1).expand(batch_size, seq_len, seq_len)
 
-	mask = rep_mask.unsqueeze(1).expand(batch_size, seq_len, seq_len)
-
-	return mask
+    return mask
 
 
 
@@ -90,7 +105,6 @@ class DiSA(tf.keras.Model):
         self.d_h = config.d_h
         self.direction = direction
         self.dropout_rate = config.dropout
-        self.device = config.device
 
         self.fc = layers.Dense(config.d_h)
 
@@ -99,24 +113,24 @@ class DiSA(tf.keras.Model):
 
         self.c = 5
 
-
-        self.elu = layers.elu()
+        self.elu = tf.nn.elu
         self.softmax = layers.softmax(dim=-2)
         self.dropout = layers.Dropout(config.dropout)
 
-    def call(self, x, rep_mask):
+    def call(self, x):
+    # def call(self, x, rep_mask):
 
-        batch_size, seq_len, d_e = x.size()
+        # batch_size, seq_len, d_e = x.size()
 
         # Make diriectional mask
         # (batch, seq_len, seq_len)
-        rep_mask_tile = get_rep_mask_tile(rep_mask)
+        # rep_mask_tile = get_rep_mask_tile(rep_mask)
         # (1, seq_len, seq_len)
-        direct_mask_tile = get_direct_mask_tile(self.direction, seq_len)
+        # direct_mask_tile = get_direct_mask_tile(self.direction, seq_len)
         # (batch, seq_len, seq_len)
-        mask = rep_mask_tile * direct_mask_tile
+        # mask = rep_mask_tile * direct_mask_tile
         # (batch, seq_len, seq_len, 1)
-        mask.unsqueeze_(-1)
+        # mask.unsqueeze_(-1)
 
         # Transform the input seq to a seq of hidden (#14)
         x_dp = self.dropout(x)

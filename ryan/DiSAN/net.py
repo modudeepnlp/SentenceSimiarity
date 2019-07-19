@@ -1,77 +1,87 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from HBMP.embeddings import SentenceEmbedding
 
-class FCClassifier(tf.keras.Model):
-	"""
-	Directional Self-Attention Network for RNN/CNN-Free Language Understanding
-	"""
-	def __init__(self, config):
-		super(FCClassifier, self).__init__()
-		self.config = config
+from DiSAN.ops import *
 
-		self.seq_in_size = 4 * config.hidden_dim
-		self.fc_dim = config.fc_dim
-		self.out_dim = config.out_dim
-		self.activation = config.activation # 'relu'
-		self.dropout = config.dropout
+def get_rep_mask(lengths, sentence_len, device):
+	rep_mask = torch.FloatTensor(len(lengths), sentence_len).to(device)
+	rep_mask.data.fill_(1)
+	for i in range(len(lengths)):
+		rep_mask[i, lengths[i]:] = 0
 
-		if self.config.encoder_type == 'BiLSTMMaxPoolEncoder':
-			self.seq_in_size *= 2
-		elif self.config.encoder_type == 'HBMP':
-			self.seq_in_size *= 6
+	return rep_mask
 
-	def mlp(self, x):
+class NN4SNLI(tf.keras.Model):
 
-		# print(x)
-		# print(self.dropout)
-		# print("##########")
-
-		x = layers.Dropout(self.dropout)(x)
-		x = layers.Dense(self.fc_dim, activation=self.activation)(x)
-		x = layers.Dropout(self.dropout)(x)
-		x = layers.Dense(self.fc_dim, activation=self.activation)(x)
-		x = layers.Dense(self.out_dim, activation='softmax')(x)
-
-		return x
-
-	def call(self, prem, hypo):
-		features = tf.concat([prem, hypo, tf.abs(prem-hypo), prem*hypo], 1)
-
-		output = self.mlp(features)
-		return output
-
-class NLIModel(tf.keras.Model):
-	"""
-	NLI 테스크의 Main 모델
-	"""
 	def __init__(self, config, train_embedding=None):
-		super(NLIModel, self).__init__()
+		super(NN4SNLI, self).__init__()
 
 		self.config = config
 		if config.use_glove == True:
 			self.sentence_embedding = SentenceEmbedding(config, train_embedding)
 		else:
 			self.sentence_embedding = SentenceEmbedding(config)
-		self.classifier = FCClassifier(config)
+
+		self.d_e = config.d_e
+		self.d_h = config.d_h
+
+		self.dropout = layers.Dropout(config.dropout)
+		self.elu = tf.nn.elu
+
+		# self.disan = DiSAN(config)
+		self.disa = DiSA(config, direction='fw')
+
+		self.fc = layers.Dense(config.d_h)
+		self.fc_out = layers.Dense(config.out_dim)
+
+		# init.xavier_uniform_(self.fc.weight.data)
+		# init.constant_(self.fc.bias.data, 0)
+		# init.xavier_uniform_(self.fc_out.weight.data)
+		# init.constant_(self.fc_out.bias.data, 0)
 
 	def call(self, x):
 
 		prem = self.sentence_embedding(x[0])
 		hypo = self.sentence_embedding(x[1])
-		# prem = self.sentence_embedding(x1)
-		# hypo = self.sentence_embedding(x2)
-		answer = self.classifier(prem, hypo)
 
-		return answer
+		prem = self.disa(prem)
 
 
 
+		# # Get representation masks for sentences of variable lengths
+		# _, p_seq_len = prem.size()
+		# _, h_seq_len = hypo.size()
+
+		# print(p_seq_len)
+		# print(h_seq_len)
+		# print(prem.size())
+		#
+		# p_rep_mask = get_rep_mask(pre_length, p_seq_len)
+		# # h_rep_mask = get_rep_mask(hypo_lengths, h_seq_len, self.device)
+		# import sys
+		# sys.exit(0)
+
+		prem = self.disa(prem, direction='fw')
 
 
 
 
+		print(prem)
 
+		#
+		# # Embedding
+		# pre_x = self.word_emb(premise)
+		# hypo_x = self.word_emb(hypothesis)
+		#
+		# # DiSAN
+		# pre_s = self.disan(pre_x, p_rep_mask)
+		# hypo_s = self.disan(hypo_x, h_rep_mask)
+		#
+		# # Concat
+		s = tf.concat([prem, hypo, prem - hypo, prem * hypo], axis=-1)
 
+		# Fully connected layer
+		outs = self.elu(self.fc(self.dropout(s)))
+		outs = self.fc_out(self.dropout(outs))
 
-
+		return outs
