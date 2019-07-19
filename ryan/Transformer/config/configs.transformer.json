@@ -1,0 +1,22 @@
+{
+  "data_name": "quora",
+  "data_file": "data_in/GLUE/QQP/original/quora_duplicate_questions.tsv",
+  "embed_file": "d",
+  "training_ratio": 0.8,
+  "max_len": 20,
+  "batch_size": 32,
+  "num_iters": 7,
+  "learning_rate": 0.001,
+  "seed": 42,
+  "data_out": "data_out/",
+  "epoch": 10,
+  "batch": 256,
+  "n_embd": 768,
+  "n_head": 12,
+  "n_layer": 12,
+  "embd_pdrop": 0.1,
+  "attn_pdrop": 0.1,
+  "resid_pdrop": 0.1,
+  "afn": "gelu",
+  "clf_pdrop": 0.1
+}
