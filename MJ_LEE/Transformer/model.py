@@ -164,7 +164,6 @@ class encoder(nn.Module):
         output = self.add_norm(something, p_fcn) # [256, 21, 128]
 
         return output
-        return 0
 
 class classifier(nn.Module):
     def __init__(self, vocab_list, emb_weight):
