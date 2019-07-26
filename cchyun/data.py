@@ -20,9 +20,7 @@ def build_text(file):
 
     gold_label = []
     sentence1 = []
-    length1 = 0
     sentence2 = []
-    length2 = 0
     for i, row in dataset.iterrows():
         if row['gold_label'] == "-" or pd.isnull(row['sentence1']) or pd.isnull(row['sentence2']):
             continue
@@ -31,13 +29,11 @@ def build_text(file):
 
         line1 = strip_string(row['sentence1']).split()
         sentence1.append(line1)
-        length1 = max(length1, len(line1))
 
         line2 = strip_string(row['sentence2']).split()
         sentence2.append(line2)
-        length2 = max(length2, len(line2))
     
-    return gold_label, sentence1, length1, sentence2, length2
+    return gold_label, sentence1, sentence2
 
 
 def build_vocab(texts):
@@ -47,52 +43,87 @@ def build_vocab(texts):
             tokens.extend(line)
 
     counter = collections.Counter(tokens)
-    vocab = { "<pad>": 0, "<unk>": 1, "<bos>": 2, "<eos>": 3 }
-    index = 4
+    vocab = { "<pad>": 0, "<unk>": 1, "<bos>": 2, "<dlm>": 3, "<eos>": 4 }
+    index = len(vocab)
     for key, _ in counter.items():
         vocab[key] = index
         index += 1
     return vocab
 
 
-def text_to_data(vocab, text, length):
-    data = []
+def text_to_index(vocab, text):
+    index = []
     for line in text:
-        line_data = []
+        line_index = []
         for token in line:
             if token in vocab:
-                line_data.append(vocab[token])
+                line_index.append(vocab[token])
             else:
                 line_data.append(vocab["<unk>"])
-        line_data.extend([vocab["<pad>"]] * (length - len(line_data)))
-        data.append(line_data)
+        index.append(line_index)
+    return index
 
-    return data
+
+def index_pad(indexs, i_pad):
+    length = 0
+    for index in indexs:
+        for line in index:
+            length = max(length, len(line))
+
+    pads = []
+    for index in indexs:
+        pad = []
+        for line in index:
+            line_pad = []
+            line_pad.extend(line)
+            line_pad.extend([i_pad] * (length - len(line_pad)))
+            pad.append(line_pad[0:length])
+        pads.append(pad)
+    return pads
+
+
+# <bos> text1 <dlm> text2 <eos>
+def index_concat(index1, index2, i_bos, i_dlm, i_eos):
+    concat = []
+    for i in range(len(index1)):
+        line_concat = []
+        line_concat.append(i_bos)
+        line_concat.extend(index1[i])
+        line_concat.append(i_dlm)
+        line_concat.extend(index2[i])
+        line_concat.append(i_eos)
+        concat.append(line_concat)
+    return concat
 
 
 def dump_data(train, valid, test, save):
-    train_label, train_sentence1, train_length1, train_sentence2, train_length2 = build_text(train)
-    valid_label, valid_sentence1, valid_length1, valid_sentence2, valid_length2 = build_text(valid)
-    test_label, test_sentence1, test_length1, test_sentence2, test_length2 = build_text(test)
-    length = max(train_length1, train_length2, valid_length1, valid_length2, test_length1, test_length2)
+    train_label, train_sentence1, train_sentence2 = build_text(train)
+    valid_label, valid_sentence1, valid_sentence2 = build_text(valid)
+    test_label, test_sentence1, test_sentence2 = build_text(test)
 
     vocab = build_vocab([train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2])
 
-    train_sentence1 = np.array(text_to_data(vocab, train_sentence1, length))
-    train_sentence2 = np.array(text_to_data(vocab, train_sentence2, length))
-    valid_sentence1 = np.array(text_to_data(vocab, valid_sentence1, length))
-    valid_sentence2 = np.array(text_to_data(vocab, valid_sentence2, length))
-    test_sentence1 = np.array(text_to_data(vocab, test_sentence1, length))
-    test_sentence2 = np.array(text_to_data(vocab, test_sentence2, length))
+    data_i = [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]
+    data_s = []
+    for data in data_i:
+        data_s.append(text_to_index(vocab, data))
+
+    data_c = []
+    for i in range(0, len(data_s), 2):
+        data_c.append(index_concat(data_s[i], data_s[i + 1], vocab["<bos>"], vocab["<dlm>"], vocab["<eos>"]))
+        data_c.append(index_concat(data_s[i + 1], data_s[i], vocab["<bos>"], vocab["<dlm>"], vocab["<eos>"]))
+    
+    data_s = index_pad(data_s, vocab["<pad>"])
+    data_c = index_pad(data_c, vocab["<pad>"])
 
     with open(save, 'wb') as f:
-        pickle.dump((vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2), f)
+        pickle.dump((vocab, train_label, data_s[0], data_s[1], data_c[0], data_c[1], valid_label, data_s[2], data_s[3], data_c[2], data_c[3], test_label, data_s[4], data_s[5], data_c[4], data_c[5]), f)
 
 
 def load_data(file):
     with open(file, 'rb') as f:
-        vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = pickle.load(f)
-    return vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2
+        vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1 = pickle.load(f)
+    return vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1
 
 
 if __name__ == "__main__":

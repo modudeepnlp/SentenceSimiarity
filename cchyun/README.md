@@ -106,3 +106,9 @@
   - dev: 82.422
   - test: 82.176
 
+
+# 2019-07-19 - Transformer ([s1; s2, |s1 - s2|, s1 * s2])
+  - config: { 'n_enc_vocab': 33797, 'n_dec_vocab': 33797, 'n_enc_seq': 82, 'n_dec_seq': 82, 'n_layer': 6, 'd_embed': 300, 'i_pad': 0, 'd_ff': 64, 'n_heads': 4, 'd_k': 32, 'd_v': 32, 'dropout': 0.1 }
+  - dev: 73.349
+  - test: 73.198
+

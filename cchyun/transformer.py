@@ -213,6 +213,55 @@ class Decoder(nn.Module):
         return dec_outputs, dec_self_attns, dec_enc_attns
 
 
+class DecoderSNLILayer(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.dec_self_attn = MultiHeadAttention(self.config)
+        self.dec_enc_attn = MultiHeadAttention(self.config)
+        self.pos_ffn = PoswiseFeedForwardNet(self.config)
+    
+    def forward(self, dec_inputs, dec_self_attn_mask):
+        # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
+        dec_outputs, dec_self_attn = self.dec_self_attn(dec_inputs, dec_inputs, dec_inputs, dec_self_attn_mask)
+        dec_outputs = self.pos_ffn(dec_outputs)
+        # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
+        return dec_outputs, dec_self_attn
+
+
+class DecoderSNLI(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.dec_emb = nn.Embedding(self.config.n_dec_vocab, self.config.d_embed)
+        sinusoid_table = torch.FloatTensor(get_sinusoid_encoding_table(self.config.n_dec_seq + 1, self.config.d_embed))
+        self.pos_emb = nn.Embedding.from_pretrained(sinusoid_table, freeze=True)
+
+        self.layers = nn.ModuleList([DecoderSNLILayer(self.config) for _ in range(self.config.n_layer)])
+    
+    def forward(self, dec_inputs):
+        possitions = torch.cumsum(torch.ones(dec_inputs.size(1), dtype=torch.long).to(self.config.device), dim=0) * (1 - dec_inputs.eq(self.config.i_pad)).to(torch.long)
+        # (bs, n_dec_seq, d_embed)
+        dec_outputs = self.dec_emb(dec_inputs) + self.pos_emb(possitions)
+
+        # (bs, n_dec_seq, n_dec_seq)
+        dec_attn_pad_mask = get_attn_pad_mask(dec_inputs, dec_inputs, self.config.i_pad)
+        # (bs, n_dec_seq, n_dec_seq)
+        dec_attn_subsequent_mask = get_attn_subsequent_mask(dec_inputs)
+        # (bs, n_dec_seq, n_dec_seq)
+        dec_self_attn_mask = torch.gt((dec_attn_pad_mask + dec_attn_subsequent_mask), 0)
+
+        dec_self_attns = []
+        for layer in self.layers:
+            # (bs, n_dec_seq, d_embed), (bs, n_dec_seq, n_dec_seq)
+            dec_outputs, dec_self_attn = layer(dec_outputs, dec_self_attn_mask)
+            dec_self_attns.append(dec_self_attn)
+        # (bs, n_dec_seq, d_embed), [(bs, n_dec_seq, n_dec_seq)]
+        return dec_outputs, dec_self_attns
+
+
 class Transformer(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -266,28 +315,60 @@ class ScheduledOptim():
             param_group['lr'] = lr
 
 
-class SNLI(nn.Module):
+"""
+    promise, hypersis:        loss: 0.599, dev: 75.086, test: 75.428
+                              loss: 0.657, dev: 65.474, test: 64.780
+    <s>p<d>h<e>, <s>h<d>p<e>: loss: 0.643, dev: 73.359, test: 73.137
+"""
+class SNLITransformer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
         self.encoder = Encoder(self.config)
-        # self.max_pool = nn.AdaptiveMaxPool1d(1)
+        self.decoder = Decoder(self.config)
+        self.decoder.dec_emb = self.encoder.enc_emb
+        n_hidden = config.n_dec_seq * config.d_embed
+        self.projection = nn.Linear(n_hidden, self.config.n_output, bias=False)
+    
+    def forward(self, sentence1, sentence2):
+         # (bs, n_enc_seq, d_embed), [(bs, n_head, n_enc_seq, n_enc_seq)]
+        enc_outputs, enc_self_attns = self.encoder(sentence1)
+        # (bs, n_seq, d_embed), [(bs, n_head, n_dec_seq, n_dec_seq)], [(bs, n_head, n_dec_seq, n_enc_seq)]
+        dec_outputs, dec_self_attns, dec_enc_attns = self.decoder(sentence2, sentence1, enc_outputs)
+        # (bs, n_dec_seq, n_dec_vocab)
+        output = self.projection(dec_outputs.view(dec_outputs.size()[0], -1))
+        return output
+
+
+"""
+    promise, hypersis, [h;p,|h-p|,h*p]: loss: 0.549, dev: 76.245, test: 76.079
+    <s>p<d>h<e>, <s>h<d>p<e>          : loss: 0.567, dev: 75.147, test: 74.898
+                                        loss: 0.218, dev: 79.628, test: 79.591
+"""
+class SNLIEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.encoder = Encoder(self.config)
         self.dropout1 = nn.Dropout(p=config.dropout)
-        self.layout1 = nn.Linear(config.n_enc_seq * config.d_embed * 4, config.d_ff * 2)
+        n_hidden = config.n_enc_seq * config.d_embed
+        self.layout1 = nn.Linear(n_hidden, n_hidden // 4)
         self.dropout2 = nn.Dropout(p=config.dropout)
-        self.layout2 = nn.Linear(config.d_ff * 2, config.d_ff)
-        self.layout3 = nn.Linear(config.d_ff, config.n_output)
+        self.layout2 = nn.Linear(n_hidden // 4, n_hidden // 16)
+        self.layout3 = nn.Linear(n_hidden // 16, config.n_output)
     
     def forward(self, sentence1, sentence2):
         # (bs, n_enc_seq, d_embed) -> (bs, n_enc_seq * d_embed)
         sentence1_ctx, _ = self.encoder(sentence1)
         sentence1_ctx = sentence1_ctx.view(sentence1_ctx.size()[0], -1)
-        sentence2_ctx, _ = self.encoder(sentence2)
-        sentence2_ctx = sentence2_ctx.view(sentence2_ctx.size()[0], -1)
+        # sentence2_ctx, _ = self.encoder(sentence2)
+        # sentence2_ctx = sentence2_ctx.view(sentence2_ctx.size()[0], -1)
 
-        # (bs, n_enc_seq * d_embed * 4)
-        output = torch.cat([sentence1_ctx, sentence2_ctx, torch.abs(sentence1_ctx - sentence2_ctx), sentence1_ctx * sentence2_ctx], 1)
+        # # (bs, n_enc_seq * d_embed * 4)
+        # output = torch.cat([sentence1_ctx, sentence2_ctx, torch.abs(sentence1_ctx - sentence2_ctx), sentence1_ctx * sentence2_ctx], 1)
+        output = sentence1_ctx
 
         output = self.dropout1(output)
         output = F.relu(self.layout1(output))
@@ -295,4 +376,45 @@ class SNLI(nn.Module):
         output = F.relu(self.layout2(output))
         output = self.layout3(output)
         return output
+
+
+"""
+    promise, hypersis, [h;p,|h-p|,h*p]: loss: 0.664, dev: 72.424, test: 72.445
+    <s>p<d>h<e>, <s>h<d>p<e>          : loss: 0.671, dev: 72.069, test: 72.64
+"""
+class SNLIDecoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        self.decoder = DecoderSNLI(self.config)
+        self.dropout1 = nn.Dropout(p=config.dropout)
+        n_hidden = config.n_dec_seq * config.d_embed
+        self.layout1 = nn.Linear(n_hidden, n_hidden // 4)
+        self.dropout2 = nn.Dropout(p=config.dropout)
+        self.layout2 = nn.Linear(n_hidden // 4, n_hidden // 16)
+        self.layout3 = nn.Linear(n_hidden // 16, config.n_output)
+    
+    def forward(self, sentence1, sentence2):
+        # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
+        sentence1_ctx, _ = self.decoder(sentence1)
+        sentence1_ctx = sentence1_ctx.view(sentence1_ctx.size()[0], -1)
+        # sentence2_ctx, _ = self.decoder(sentence2)
+        # sentence2_ctx = sentence2_ctx.view(sentence2_ctx.size()[0], -1)
+
+        # # (bs, n_dec_seq * d_embed * 4)
+        # output = torch.cat([sentence1_ctx, sentence2_ctx, torch.abs(sentence1_ctx - sentence2_ctx), sentence1_ctx * sentence2_ctx], 1)
+        output = sentence1_ctx
+
+        output = self.dropout1(output)
+        output = F.relu(self.layout1(output))
+        output = self.dropout2(output)
+        output = F.relu(self.layout2(output))
+        output = self.layout3(output)
+        return output
+
+
+class SNLI(SNLIEncoder):
+    def __init__(self, config):
+        super().__init__(config)
 

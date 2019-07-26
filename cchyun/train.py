@@ -121,21 +121,23 @@ def main():
     # config = cfg.Config.load("config.hbmp.json")
     config = cfg.Config.load("config.transformer.json")
 
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = data.load_data("data/snli_data.pkl")
- 
+    vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1 = data.load_data("data/snli_data.pkl")
+    # datas = [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]
+    datas = [train_1_2, train_2_1, valid_1_2, valid_2_1, test_1_2, test_2_1]
+
     # cuda or cpu
     config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.n_enc_seq = max(len(train_sentence1[0]), len(train_sentence2[0]))
-    config.n_dec_seq = max(len(train_sentence1[0]), len(train_sentence2[0]))
+    config.n_enc_seq = max(len(datas[0][0]), len(datas[1][0]))
+    config.n_dec_seq = max(len(datas[0][0]), len(datas[1][0]))
     config.i_pad = vocab["<pad>"]
 
-    train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
-    # train_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
-    valid_loader = build_tensor(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
-    test_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
+    train_loader = build_tensor(train_label, datas[0], datas[1], config.device, config.n_batch)
+    # train_loader = build_tensor(test_label, datas[4], datas[5], config.device, config.n_batch) ## only for fast test
+    valid_loader = build_tensor(valid_label, datas[2], datas[3], config.device, config.n_batch)
+    test_loader = build_tensor(test_label, datas[4], datas[5], config.device, config.n_batch)
 
     configs = []
     configs.append(config)
