@@ -1,4 +1,5 @@
 {
+  "model_name": "openai-gpt",
   "data_name": "quora",
   "data_file": "data_in/GLUE/QQP/original/quora_duplicate_questions.tsv",
   "embed_file": "d",

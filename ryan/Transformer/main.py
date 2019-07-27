@@ -1,9 +1,9 @@
 """
-MALSTM: https://github.com/fionn-mac/Manhattan-LSTM/blob/master/PyTorch/main.py
-
+OpenGPT Documentation: https://huggingface.co/pytorch-transformers/model_doc/gpt.html
 """
 
 import os
+import sys
 import argparse
 import torch
 import torch.nn as nn
@@ -15,7 +15,9 @@ import logging
 import json
 import matplotlib.pyplot as plt
 
-from models.transformer import TransformerModel
+from models.transformer import TransformerModel, DoubleHeadModel
+from models.loss import ClassificationLossCompute
+
 from utils.data import Data
 from utils import configs
 
@@ -27,6 +29,104 @@ import config as config
 
 config_path = 'config/configs.transformer.json'
 args = configs.Config.load(config_path)
+
+from pytorch_transformers import (OpenAIGPTDoubleHeadsModel, OpenAIGPTTokenizer, OpenAIGPTConfig, OpenAIGPTModel,
+                                     AdamW, cached_path, WEIGHTS_NAME, CONFIG_NAME)
+from pytorch_transformers.modeling_openai import OpenAIGPTPreTrainedModel
+from pytorch_transformers.modeling_utils import SequenceSummary
+
+
+special_tokens = ['[CLS]']
+config = OpenAIGPTConfig.from_pretrained('openai-gpt')
+config.num_labels = 3
+
+# model = OpenAIGPTModel(config)
+
+tokenizer = OpenAIGPTTokenizer.from_pretrained(args.model_name, special_tokens=special_tokens) # OpenAI용 토크나이저 불러오기
+special_tokens_ids = list(tokenizer.convert_tokens_to_ids(token) for token in special_tokens)
+
+choices = ["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]  # Assume you've added [CLS] to the vocabulary
+input_ids = torch.tensor([tokenizer.encode(s) for s in choices]).unsqueeze(0)  # Batch size 1, 2 choices
+
+class CustomClassifier(OpenAIGPTPreTrainedModel):
+
+	def __init__(self, config):
+		super(CustomClassifier, self).__init__(config)
+
+		self.transformer = OpenAIGPTModel(config)
+		self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+		self.apply(self.init_weights)
+		self.multiple_choice_head = SequenceSummary(config)
+		self.tie_weights()
+
+	def tie_weights(self):
+		""" Make sure we are sharing the input and output embeddings.
+			Export to TorchScript can't handle parameter sharing so we are cloning them instead.
+		"""
+		self._tie_or_clone_weights(self.lm_head,
+		                           self.transformer.tokens_embed)
+
+	def forward(self, input_ids, mc_token_ids=None, lm_labels=None, mc_labels=None, token_type_ids=None,
+                position_ids=None, head_mask=None):
+
+		transformer_outputs = self.transformer(input_ids, position_ids=position_ids, token_type_ids=token_type_ids,
+		                                       head_mask=head_mask)
+
+		hidden_states = transformer_outputs[0]
+		lm_logits = self.lm_head(hidden_states)
+		mc_logits = self.multiple_choice_head(hidden_states, mc_token_ids).squeeze(-1)
+
+		outputs = (lm_logits, mc_logits) + transformer_outputs[1:]
+
+		return hidden_states
+
+model = CustomClassifier.from_pretrained(args.model_name, num_special_tokens=len(special_tokens))
+
+outputs = model(input_ids)
+
+# outputs.shape
+#
+# lm_prediction_scores, mc_predictions_scroes = outputs[:2]
+#
+# # SentA
+# a = outputs[0]
+# # SentB
+# sentA = a[0]
+# sentB = a[1]
+
+# sentA + sentB
+
+
+["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]
+
+#Start + Text1 + Delim + Text2 + Extract
+#Start + Text2 + Delim + Text1 + Extract
+
+#Start + Premise + Delim + Hypothese + Extract
+
+
+
+
+
+
+# model = OpenAIGPTDoubleHeadsModel.from_pretrained(args.model_name, num_special_tokens=len(special_tokens))
+# input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute")).unsqueeze(0)
+# choices = ["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]  # Assume you've added [CLS] to the vocabulary
+# input_ids = torch.tensor([tokenizer.encode(s) for s in choices]).unsqueeze(0)  # Batch size 1, 2 choices
+# mc_labels_ids = torch.tensor([-1, -1]).unsqueeze(0)  # Batch size 1
+#
+# outputs = model(input_ids)
+
+
+# last_hidden_states = outputs[0]
+
+# model = OpenAIGPTDoubleHeadsModel(config)
+# choices = ["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]  # Assume you've added [CLS] to the vocabulary
+# input_ids = torch.tensor([tokenizer.encode(s) for s in choices]).unsqueeze(0)  # Batch size 1, 2 choices
+# mc_token_ids = torch.tensor([-1, -1]).unsqueeze(0)  # Batch size 1
+# mc_token_ids = torch.tensor([0, 0, 1]).unsqueeze(0)  # Batch size 1
+# outputs = model(input_ids, mc_token_ids)
+# lm_prediction_scores, mc_prediction_scores = outputs[:2]
 
 # print('Model Parameters:')
 # print('Hidden Size                  :', args.hidden_size)
@@ -55,13 +155,6 @@ if not os.path.exists(args.data_out):
 
 print('Building Model')
 
-model = TransformerModel(args)
-model
-
-
-
-
-
 dataset = custom_dataset.Custom_dataset()
 train_data, test_data, dev_data = dataset.get_data()
 
@@ -82,6 +175,49 @@ dev_loader = DataLoader(dev_data,
                     shuffle=False,
                     num_workers=config.cpu_processor,
                     drop_last=True)
+
+
+
+model = TransformerModel(args)
+
+n_ctx = 512
+
+for n, (label, sent1, sent2) in enumerate(dev_loader):
+	label = Variable(label.to(device))
+	sent1 = Variable(torch.stack(sent1).to(device))
+	sent2 = Variable(torch.stack(sent2).to(device))
+
+
+dh_model = DoubleHeadModel(args, sent1, 'inference', len(dataset.vocab_list), n_ctx)
+for name, Parameter in dh_model.named_parameters():
+	print(name, Parameter)
+
+optimizer = torch.optim.Adam(dh_model.parameters(), lr=config.learning_rate)
+loss_function = nn.CrossEntropyLoss()
+dh_model.to(device)
+dh_model = nn.DataParallel(dh_model)
+
+# embedding = nn.Embedding(len(dataset.vocab_list), 300)
+# emb = embedding(sent1)
+
+dh_model(sent1)
+
+sys.exit(0)
+
+
+
+
+
+# a = sent1.view(21,256)
+# a.shape
+
+
+
+
+
+
+
+
 
 
 model = Manhattan_LSTM(args.batch, args.hidden_size, [len(dataset.vocab_list), args.embedding_dim], use_embedding=False, train_embedding=True)
