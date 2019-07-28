@@ -37,6 +37,7 @@ def build_text(file, max_len):
 		bos = tokenizer.convert_tokens_to_ids('<bos>')
 		delim = tokenizer.convert_tokens_to_ids('<del>')
 		eos = tokenizer.convert_tokens_to_ids('<eos>')
+		pad = tokenizer.convert_tokens_to_ids('<pad>')
 
 		line1_index = tokenizer.convert_tokens_to_ids(list(line1))
 		line2_index = tokenizer.convert_tokens_to_ids(list(line2))
@@ -47,9 +48,21 @@ def build_text(file, max_len):
 
 		entailment_sent = list([bos] + line1_index + [delim] + line2_index + [eos])
 
-		if len(entailment_sent) >= max_len:
+
+		if len(entailment_sent) > max_len:
 			entailment_sent = entailment_sent[:max_len -1] + [eos]
-			print(entailment_sent)
+
+		elif len(entailment_sent) < max_len:
+
+			entail_list = []
+
+			pad_list = [pad] * (max_len - len(entailment_sent))
+			entail_list.extend(entailment_sent)
+			entail_list.extend(pad_list)
+
+			entailment_sent = entail_list
+
+		print(len(entailment_sent))
 
 		# entailment_index = line1_index
 		# [: half_len - 2]
@@ -61,13 +74,14 @@ def build_text(file, max_len):
 		# special_tokens_ids = list(tokenizer.convert_tokens_to_ids(token) for token in special_tokens)\
 		# index_sent = list(tokenizer.convert_tokens_to_ids(a) for token in special_tokens)
 
-		sentence1.append((current_label, entailment_sent))
+		gold_label.append(current_label)
+		sentence1.append(entailment_sent)
 
 	# sentence2.append(line2)
 
 		# tokenizer.convert_tokens_to_ids(token)
 
-	return sentence1
+	return gold_label, sentence1
 
 
 if __name__ == "__main__":
@@ -78,25 +92,28 @@ if __name__ == "__main__":
 	path_test = args.data_path + "snli_1.0_test.txt"
 	path_dev = args.data_path + "snli_1.0_dev.txt"
 
-	config = OpenAIGPTConfig.from_pretrained('openai-gpt')
-
-	special_tokens = ['<bos>', '<del>', '<eos>']
+	special_tokens = ['<bos>', '<del>', '<eos>', '<pad>']
 	tokenizer = OpenAIGPTTokenizer.from_pretrained('openai-gpt', special_tokens=special_tokens)  # OpenAI용 토크나이저 불러오기
 	tokenizer.add_tokens(special_tokens)
 	tokenizer.max_len = args.max_len
 
-	a = build_text(path_train, args.max_len)
+	tokenizer.bos_token = '<bos>'
+	tokenizer.eos_token = '<eos>'
+	tokenizer.sep_token = '<del>'
+	tokenizer.pad_token = '<pad>'
+
+	label, sent = build_text(path_train, args.max_len)
 
 	# len(tokenizer)
 	# tokenizer.convert_ids_to_tokens('<del>')
 
 	with open('train.pkl', 'wb') as f:
-		pickle.dump(a, f)
-		print("save train completed")
+		pickle.dump((label, sent), f)
+		print("save completed")
 
 	with open('train.pkl', 'rb') as f:
-		data_df = pickle.load(f)
-		print("train compeleted")
+		label, data_df = pickle.load(f)
+		print("load compeleted")
 
 	# special_tokens_ids = list(tokenizer.convert_tokens_to_ids(token) for token in special_tokens)
 

@@ -5,7 +5,7 @@
   "embed_file": "d",
   "training_ratio": 0.8,
   "max_len": 256,
-  "batch_size": 32,
+  "batch_size": 16,
   "num_iters": 7,
   "learning_rate": 0.001,
   "seed": 42,

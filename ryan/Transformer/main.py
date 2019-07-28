@@ -15,7 +15,7 @@ import random
 import numpy as np
 import logging
 import json
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 from models.transformer import TransformerModel, DoubleHeadModel
 from models.loss import ClassificationLossCompute
@@ -59,15 +59,17 @@ if not os.path.exists(args.data_out):
 
 print('Building Model')
 
+
 def load_pick(file_nm):
 	with open(file_nm, 'rb') as f:
-		df = pickle.load(f)
+		label, df = pickle.load(f)
 		print("load compeleted")
-		return df
+		return label, df
 
-dev_data = load_pick('dev.pkl')
+dev_label, dev_df = load_pick('data_in/dev.pkl')
+train_label, train_df = load_pick('data_in/dev.pkl')
 
-special_tokens = ['<bos>', '<del>', '<eos>']
+special_tokens = ['<bos>', '<del>', '<eos>', '<pad>']
 tokenizer = OpenAIGPTTokenizer.from_pretrained(args.model_name, special_tokens=special_tokens)  # OpenAI용 토크나이저 불러오기
 tokenizer.add_tokens(special_tokens)
 
@@ -79,8 +81,7 @@ config.summary_type = 'last'
 tokenizer.bos_token = '<bos>'
 tokenizer.eos_token = '<eos>'
 tokenizer.sep_token = '<del>'
-
-# model = OpenAIGPTModel(config)
+tokenizer.pad_token = '<pad>'
 
 class CustomClassifier(OpenAIGPTPreTrainedModel):
 
@@ -114,13 +115,70 @@ class CustomClassifier(OpenAIGPTPreTrainedModel):
 
 		return mc_logits
 
+
 # model = CustomClassifier.from_pretrained(args.model_name, num_special_tokens=special_tokens)
 model = CustomClassifier(config)
+model.to(device)
 
 # model.resize_token_embeddings(len(tokenizer))
-# model.train()
 
 
+def build_tensor(label, sentence, device, batch_size):
+	torch_label = torch.tensor(label, dtype=torch.long).to(device)
+	torch_sent = torch.tensor(sentence, dtype=torch.long).to(device)
+	dataset = torch.utils.data.TensorDataset(torch_label, torch_sent)
+	data_loader = DataLoader(dataset,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        drop_last=True)
+	return data_loader
+
+dev_loader = build_tensor(dev_label, dev_df, device, args.batch_size)
+train_loader = build_tensor(train_label, train_df, device, args.batch_size)
+
+loss_fn = torch.nn.CrossEntropyLoss()
+
+num_total_steps = 1000
+num_warmup_steps = 100
+warmup_propotion = float(num_warmup_steps) / float(num_total_steps)
+
+optimizer = AdamW(model.parameters(), lr=args.learning_rate, correct_bias=False)
+scheduler = WarmupLinearSchedule(optimizer, warmup_steps=num_warmup_steps, t_total=num_total_steps)  # PyTorch scheduler
+
+train_loss = 0
+
+for n, (label, entailment_sent) in enumerate(train_loader):
+
+	optimizer.zero_grad()
+	outputs = model(entailment_sent)
+	loss = loss_fn(outputs, label)
+	loss.backward()
+	scheduler.step()
+	optimizer.step()
+
+	train_loss += loss.item()
+
+	if n % 50 == 0:
+		epoch_loss = train_loss / 50
+		print("epoch {}, loss: {}".format(n, epoch_loss))
+		train_loss = 0
+
+
+
+
+
+# dh_model = nn.DataParallel(dh_model)
+
+# for batch in train_data:
+# 	loss = dh_model(sent1)
+# 	loss.backward()
+# 	scheduler.step()
+# 	optimizer.step()
+
+
+# dataset = custom_dataset.Custom_dataset()
+# train_data, test_data, dev_data = dataset.get_data()
+#
 # train_loader = DataLoader(train_data,
 #                           batch_size=args.batch,
 #                           shuffle=True,
@@ -130,201 +188,9 @@ model = CustomClassifier(config)
 # test_loader = DataLoader(test_data,
 #                          batch_size=args.batch,
 #                          shuffle=False,
-#                          num_workers=args.cpu_processor,
 #                          drop_last=True)
-
-dev_loader = DataLoader(dev_data,
-                        batch_size=args.batch,
-                        shuffle=False,
-                        drop_last=True)
-
-for n, (label, entailment_sent) in enumerate(dev_loader):
-	label = Variable(label.to(device))
-	entailment_sent = Variable(torch.stack(entailment_sent).to(device))
-
-	print(entailment_sent)
-outputs = model(entailment_sent)
-
-dataset = custom_dataset.Custom_dataset()
-train_data, test_data, dev_data = dataset.get_data()
-
-
-train_loader = DataLoader(train_data,
-                          batch_size=args.batch,
-                          shuffle=True,
-                          num_workers=config.cpu_processor,
-                          drop_last=True)
-
-test_loader = DataLoader(test_data,
-                         batch_size=args.batch,
-                         shuffle=False,
-                         drop_last=True)
-
-dev_loader = DataLoader(dev_data,
-                        batch_size=args.batch,
-                        shuffle=False,
-                        drop_last=True)
-
-
-
-
-model = TransformerModel(args)
-
-n_ctx = 512
-
-for n, (label, sent1, sent2) in enumerate(test_loader):
-	print(sent1)
-
-	label = Variable(label.to(device))
-	sent1 = Variable(torch.stack(sent1).to(device))
-	sent2 = Variable(torch.stack(sent2).to(device))
-
-dh_model = DoubleHeadModel(args, sent1, 'inference', len(dataset.vocab_list), n_ctx)
-for name, Parameter in dh_model.named_parameters():
-	print(name, Parameter)
-
-num_total_steps = 1000
-num_warmup_steps = 100
-warmup_propotion = float(num_warmup_steps) / float(num_total_steps)
-
-optimizer = AdamW(dh_model.parameters(), lr=config.learning_rate, correct_bias=False)
-scheduler = WarmupLinearSchedule(optimizer, warmup_steps=num_warmup_steps, t_total=num_total_steps)  # PyTorch scheduler
-
-loss = nn.CrossEntropyLoss()
-dh_model.to(device)
-dh_model = nn.DataParallel(dh_model)
-
-for batch in train_data:
-	loss = dh_model(sent1)
-	loss.backward()
-	scheduler.step()
-	optimizer.step()
-
-sys.exit(0)
-
-# a = sent1.view(21,256)
-# a.shape
-
-
-model = Manhattan_LSTM(args.batch, args.hidden_size, [len(dataset.vocab_list), args.embedding_dim], use_embedding=False,
-                       train_embedding=True)
-model.to(device)
-model.init_weights()
-
-optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-loss_function = nn.CrossEntropyLoss()
-
-# 훈련
-step_list = []
-loss_list = []
-acc_test_list = []
-acc_dev_list = []
-step = 0
-
-
-def evaluation(loader):
-	total = 0
-	correct = 0
-	for n, (label, sent1, sent2) in enumerate(loader):
-		label = Variable(label.to(device))
-		sent1 = Variable(torch.stack(sent1).to(device))
-		sent2 = Variable(torch.stack(sent2).to(device))
-
-		init_hidden = model.init_hidden(config.batch)
-		out = model((sent1, sent2), init_hidden)
-		_, pred = torch.max(out.data, 1)
-		total += label.size(0)  # batch size
-		correct += (pred == label).sum()
-	acc = 100 * (correct.cpu().numpy() / total)
-	return acc
-
-
-for i in range(config.epoch):
-	print("epoch = ", i)
-	for n, (label, sent1, sent2) in enumerate(train_loader):
-		optimizer.zero_grad()  # 초기화
-		init_hidden = model.init_hidden(config.batch)
-
-		label = Variable(label.to(device))
-		sent1 = Variable(torch.stack(sent1).to(device))
-		sent2 = Variable(torch.stack(sent2).to(device))
-
-		# sent = [sent1, sent2]
-
-		logit = model((sent1, sent2), init_hidden)
-		loss = loss_function(logit, label)
-		loss.backward()
-		optimizer.step()
-		step += 1
-		if n % 500 == 0:
-			print("epoch : ", i, " step : ", n, " loss : ", loss.item())
-			step_list.append(step)
-			loss_list.append(loss)
-			acc_test = evaluation(test_loader)
-			acc_dev = evaluation(dev_loader)
-			acc_test_list.append(acc_test)
-			acc_dev_list.append(acc_dev)
-
-			torch.save(model, 'data_out/malstm.pth')
-
-	# Loss 그래프
-	# plt.plot(step_list, loss_list, 'r--')
-	# plt.legend(['Training Loss'])
-	# plt.xlabel('Step')
-	# plt.ylabel('Loss')
-	# plt.savefig('Train.png')
-	#
-	# # Acc 그래프
-	# plt.plot(step_list, acc_test_list, 'b--')
-	# plt.plot(step_list, acc_dev_list, 'g--')
-	# plt.legend(['Test acc', 'dev acc'])
-	# plt.savefig('Acc.png')
-
-	print("dev acc : ", acc_dev_list)
-	print("test acc : ", acc_test_list)
-
-
-# outputs.shape
 #
-# lm_prediction_scores, mc_predictions_scroes = outputs[:2]
-#
-# # SentA
-# a = outputs[0]
-# # SentB
-# sentA = a[0]
-# sentB = a[1]
-
-# sentA + sentB
-
-# Start + Text1 + Delim + Text2 + Extract
-# Start + Text2 + Delim + Text1 + Extract
-
-# Start + Premise + Delim + Hypothese + Extract
-
-
-# model = OpenAIGPTDoubleHeadsModel.from_pretrained(args.model_name, num_special_tokens=len(special_tokens))
-# input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute")).unsqueeze(0)
-# choices = ["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]  # Assume you've added [CLS] to the vocabulary
-# input_ids = torch.tensor([tokenizer.encode(s) for s in choices]).unsqueeze(0)  # Batch size 1, 2 choices
-# mc_labels_ids = torch.tensor([-1, -1]).unsqueeze(0)  # Batch size 1
-#
-# outputs = model(input_ids)
-
-
-# last_hidden_states = outputs[0]
-
-# model = OpenAIGPTDoubleHeadsModel(config)
-# choices = ["Hello, my dog is cute [CLS]", "Hello, my cat is cute [CLS]"]  # Assume you've added [CLS] to the vocabulary
-# input_ids = torch.tensor([tokenizer.encode(s) for s in choices]).unsqueeze(0)  # Batch size 1, 2 choices
-# mc_token_ids = torch.tensor([-1, -1]).unsqueeze(0)  # Batch size 1
-# mc_token_ids = torch.tensor([0, 0, 1]).unsqueeze(0)  # Batch size 1
-# outputs = model(input_ids, mc_token_ids)
-# lm_prediction_scores, mc_prediction_scores = outputs[:2]
-
-# print('Model Parameters:')
-# print('Hidden Size                  :', args.hidden_size)
-# print('Batch Size                   :', args.batch_size)
-# print('Max. input length            :', args.max_len)
-# print('Learning rate                :', args.learning_rate)
-# print('Number of Epochs             :', args.num_iters)
-# print('--------------------------------------\n')
+# dev_loader = DataLoader(dev_data,
+#                         batch_size=args.batch,
+#                         shuffle=False,
+#                         drop_last=True)
