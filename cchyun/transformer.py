@@ -344,7 +344,7 @@ class SNLITransformer(nn.Module):
 """
     promise, hypersis, [h;p,|h-p|,h*p]: loss: 0.549, dev: 76.245, test: 76.079
     <s>p<d>h<e>, <s>h<d>p<e>          : loss: 0.567, dev: 75.147, test: 74.898
-                                        loss: 0.218, dev: 79.628, test: 79.591
+    <s>p<d>h<e>                       : loss: 0.218, dev: 79.628, test: 79.591
 """
 class SNLIEncoder(nn.Module):
     def __init__(self, config):
@@ -381,6 +381,7 @@ class SNLIEncoder(nn.Module):
 """
     promise, hypersis, [h;p,|h-p|,h*p]: loss: 0.664, dev: 72.424, test: 72.445
     <s>p<d>h<e>, <s>h<d>p<e>          : loss: 0.671, dev: 72.069, test: 72.64
+    <s>p<d>h<e>                       : loss: 0.403, dev: 78.998, test: 78.491
 """
 class SNLIDecoder(nn.Module):
     def __init__(self, config):
@@ -414,7 +415,7 @@ class SNLIDecoder(nn.Module):
         return output
 
 
-class SNLI(SNLIEncoder):
+class SNLI(SNLIDecoder):
     def __init__(self, config):
         super().__init__(config)
 

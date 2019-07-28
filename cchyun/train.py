@@ -127,7 +127,7 @@ def main():
 
     # cuda or cpu
     config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # config.n_vocab = len(vocab)
+    config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.n_enc_seq = max(len(datas[0][0]), len(datas[1][0]))
