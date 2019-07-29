@@ -59,7 +59,6 @@ if not os.path.exists(args.data_out):
 
 print('Building Model')
 
-
 def load_pick(file_nm):
 	with open(file_nm, 'rb') as f:
 		label, df = pickle.load(f)
@@ -67,7 +66,8 @@ def load_pick(file_nm):
 		return label, df
 
 dev_label, dev_df = load_pick('data_in/dev.pkl')
-train_label, train_df = load_pick('data_in/dev.pkl')
+test_label, test_df = load_pick('data_in/test.pkl')
+train_label, train_df = load_pick('data_in/train.pkl')
 
 special_tokens = ['<bos>', '<del>', '<eos>', '<pad>']
 tokenizer = OpenAIGPTTokenizer.from_pretrained(args.model_name, special_tokens=special_tokens)  # OpenAI용 토크나이저 불러오기
@@ -122,7 +122,6 @@ model.to(device)
 
 # model.resize_token_embeddings(len(tokenizer))
 
-
 def build_tensor(label, sentence, device, batch_size):
 	torch_label = torch.tensor(label, dtype=torch.long).to(device)
 	torch_sent = torch.tensor(sentence, dtype=torch.long).to(device)
@@ -134,63 +133,72 @@ def build_tensor(label, sentence, device, batch_size):
 	return data_loader
 
 dev_loader = build_tensor(dev_label, dev_df, device, args.batch_size)
+test_loader = build_tensor(test_label, test_df, device, args.batch_size)
 train_loader = build_tensor(train_label, train_df, device, args.batch_size)
 
 loss_fn = torch.nn.CrossEntropyLoss()
 
-num_total_steps = 1000
-num_warmup_steps = 100
+num_total_steps = 100000
+num_warmup_steps = 10000
 warmup_propotion = float(num_warmup_steps) / float(num_total_steps)
 
 optimizer = AdamW(model.parameters(), lr=args.learning_rate, correct_bias=False)
 scheduler = WarmupLinearSchedule(optimizer, warmup_steps=num_warmup_steps, t_total=num_total_steps)  # PyTorch scheduler
 
+def eval(loader):
+	total = 0
+	correct = 0
+	for n, (eval_label, eval_entail_sent) in enumerate(loader):
+
+		eval_outputs = model(eval_entail_sent)
+		_, pred = torch.max(eval_outputs.data, 1)
+		total += eval_label.size(0)
+		correct += (pred == label).sum()
+
+	acc = 100 * (correct.cpu().numpy()/total)
+	return acc
+
+
+step_list = []
+loss_list = []
+acc_test_list = []
+acc_dev_list = []
+
 train_loss = 0
+step = 0
+for epoch in range(args.epoch):
 
-for n, (label, entailment_sent) in enumerate(train_loader):
+	# Training Phase
+	for n, (label, entailment_sent) in enumerate(train_loader):
 
-	optimizer.zero_grad()
-	outputs = model(entailment_sent)
-	loss = loss_fn(outputs, label)
-	loss.backward()
-	scheduler.step()
-	optimizer.step()
+		model.train()
 
-	train_loss += loss.item()
+		optimizer.zero_grad()
+		outputs = model(entailment_sent)
+		loss = loss_fn(outputs, label)
+		loss.backward()
+		scheduler.step()
+		optimizer.step()
 
-	if n % 50 == 0:
-		epoch_loss = train_loss / 50
-		print("epoch {}, loss: {}".format(n, epoch_loss))
-		train_loss = 0
+		train_loss += loss.item()
 
+		step += 1
 
+		if n % 50 == 0:
 
+			epoch_loss = train_loss / 50
+			print("epoch {}, loss: {}".format(n, epoch_loss))
+			train_loss = 0
 
+		if n % 500 == 0:
 
-# dh_model = nn.DataParallel(dh_model)
+			model.eval()
+			step_list.append(step)
+			loss_list.append(epoch_loss)
+			acc_test = eval(test_loader)
+			acc_dev = eval(dev_loader)
+			acc_test_list.append(acc_test)
+			acc_dev_list.append(acc_dev)
 
-# for batch in train_data:
-# 	loss = dh_model(sent1)
-# 	loss.backward()
-# 	scheduler.step()
-# 	optimizer.step()
-
-
-# dataset = custom_dataset.Custom_dataset()
-# train_data, test_data, dev_data = dataset.get_data()
-#
-# train_loader = DataLoader(train_data,
-#                           batch_size=args.batch,
-#                           shuffle=True,
-#                           num_workers=config.cpu_processor,
-#                           drop_last=True)
-#
-# test_loader = DataLoader(test_data,
-#                          batch_size=args.batch,
-#                          shuffle=False,
-#                          drop_last=True)
-#
-# dev_loader = DataLoader(dev_data,
-#                         batch_size=args.batch,
-#                         shuffle=False,
-#                         drop_last=True)
+			print(acc_test_list)
+			print(acc_dev_list)

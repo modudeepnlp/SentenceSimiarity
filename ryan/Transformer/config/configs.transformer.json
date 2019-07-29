@@ -4,7 +4,7 @@
   "data_file": "data_in/GLUE/QQP/original/quora_duplicate_questions.tsv",
   "embed_file": "d",
   "training_ratio": 0.8,
-  "max_len": 256,
+  "max_len": 128,
   "batch_size": 16,
   "num_iters": 7,
   "learning_rate": 0.001,

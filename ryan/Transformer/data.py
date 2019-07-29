@@ -22,9 +22,13 @@ def build_text(file, max_len):
 	sentence1 = []
 	sentence2 = []
 
+	count = 0
+
 	for i, row in dataset.iterrows():
 		if row['gold_label'] == "-" or pd.isnull(row['sentence1']) or pd.isnull(row['sentence2']):
 			continue
+
+		count += 1
 
 		# gold_label.append(label_dict[row['gold_label']])
 		current_label = label_dict[row['gold_label']]
@@ -62,7 +66,7 @@ def build_text(file, max_len):
 
 			entailment_sent = entail_list
 
-		print(len(entailment_sent))
+		# print(len(entailment_sent))
 
 		# entailment_index = line1_index
 		# [: half_len - 2]
@@ -77,9 +81,8 @@ def build_text(file, max_len):
 		gold_label.append(current_label)
 		sentence1.append(entailment_sent)
 
-	# sentence2.append(line2)
-
-		# tokenizer.convert_tokens_to_ids(token)
+		if count % 10000 == 0:
+			print("Current Step: {}".format(count))
 
 	return gold_label, sentence1
 
@@ -95,25 +98,28 @@ if __name__ == "__main__":
 	special_tokens = ['<bos>', '<del>', '<eos>', '<pad>']
 	tokenizer = OpenAIGPTTokenizer.from_pretrained('openai-gpt', special_tokens=special_tokens)  # OpenAI용 토크나이저 불러오기
 	tokenizer.add_tokens(special_tokens)
-	tokenizer.max_len = args.max_len
+	# tokenizer.max_len = args.max_len
 
 	tokenizer.bos_token = '<bos>'
 	tokenizer.eos_token = '<eos>'
 	tokenizer.sep_token = '<del>'
 	tokenizer.pad_token = '<pad>'
 
-	label, sent = build_text(path_train, args.max_len)
+	def save_pkl(df_name, df_path):
 
-	# len(tokenizer)
-	# tokenizer.convert_ids_to_tokens('<del>')
+		label, sent = build_text(df_name, args.max_len)
 
-	with open('train.pkl', 'wb') as f:
-		pickle.dump((label, sent), f)
-		print("save completed")
+		with open(df_path, 'wb') as f:
+			pickle.dump((label, sent), f)
+			print("save completed")
 
-	with open('train.pkl', 'rb') as f:
-		label, data_df = pickle.load(f)
-		print("load compeleted")
+		with open(df_path, 'rb') as f:
+			label, data_df = pickle.load(f)
+			print("load compeleted")
+
+	train = save_pkl(path_train, 'train.pkl')
+	dev = save_pkl(path_dev, 'dev.pkl')
+	test = save_pkl(path_test, 'test.pkl')
 
 	# special_tokens_ids = list(tokenizer.convert_tokens_to_ids(token) for token in special_tokens)
 
