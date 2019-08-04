@@ -64,7 +64,7 @@ def text_to_index(vocab, text):
     return index
 
 
-def index_pad(indexs, i_pad):
+def index_pad(vocab, indexs):
     length = 0
     for index in indexs:
         for line in index:
@@ -75,23 +75,23 @@ def index_pad(indexs, i_pad):
         pad = []
         for line in index:
             line_pad = []
+            line_pad.append(vocab["<bos>"])
             line_pad.extend(line)
-            line_pad.extend([i_pad] * (length - len(line_pad)))
+            line_pad.append(vocab["<eos>"])
+            line_pad.extend([vocab["<pad>"]] * (length - len(line_pad)))
             pad.append(line_pad[0:length])
         pads.append(pad)
     return pads
 
 
 # <bos> text1 <dlm> text2 <eos>
-def index_concat(index1, index2, i_bos, i_dlm, i_eos):
+def index_concat(vocab, index1, index2):
     concat = []
     for i in range(len(index1)):
         line_concat = []
-        line_concat.append(i_bos)
         line_concat.extend(index1[i])
-        line_concat.append(i_dlm)
+        line_concat.append(vocab["<dlm>"])
         line_concat.extend(index2[i])
-        line_concat.append(i_eos)
         concat.append(line_concat)
     return concat
 
@@ -110,11 +110,11 @@ def dump_data(train, valid, test, save):
 
     data_c = []
     for i in range(0, len(data_s), 2):
-        data_c.append(index_concat(data_s[i], data_s[i + 1], vocab["<bos>"], vocab["<dlm>"], vocab["<eos>"]))
-        data_c.append(index_concat(data_s[i + 1], data_s[i], vocab["<bos>"], vocab["<dlm>"], vocab["<eos>"]))
+        data_c.append(index_concat(vocab, data_s[i], data_s[i + 1]))
+        data_c.append(index_concat(vocab, data_s[i + 1], data_s[i]))
     
-    data_s = index_pad(data_s, vocab["<pad>"])
-    data_c = index_pad(data_c, vocab["<pad>"])
+    data_s = index_pad(vocab, data_s)
+    data_c = index_pad(vocab, data_c)
 
     with open(save, 'wb') as f:
         pickle.dump((vocab, train_label, data_s[0], data_s[1], data_c[0], data_c[1], valid_label, data_s[2], data_s[3], data_c[2], data_c[3], test_label, data_s[4], data_s[5], data_c[4], data_c[5]), f)

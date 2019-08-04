@@ -10,6 +10,8 @@ import data
 import config as cfg
 import hbmp
 import transformer
+import gpt
+import optimizer as optim
 
 import torch
 import torch.utils.data
@@ -26,7 +28,8 @@ def build_tensor(label, sentence1, sentence2, device, batch_size):
 
 def train_model(config, train_loader, valid_loader, test_loader, log=True):
     # snli = hbmp.SNLI(config=config)
-    snli = transformer.SNLI(config=config)
+    # snli = transformer.SNLI(config=config)
+    snli = gpt.SNLI(config=config)
     snli.to(config.device)
 
     seed = 1029
@@ -34,9 +37,10 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
 
-    loss_fn = torch.nn.CrossEntropyLoss()
+    lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=config.i_pad, reduction='mean')
+    snli_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
     # optimizer = torch.optim.Adam(snli.parameters(), lr=config.learning_rate)
-    optimizer = transformer.ScheduledOptim(
+    optimizer = optim.ScheduledOptim(
         torch.optim.Adam(filter(lambda x: x.requires_grad, snli.parameters()), betas=(0.9, 0.98), eps=1e-09),
         config.d_embed, 4000)
 
@@ -56,15 +60,23 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         #
         snli.train()
         train_loss = 0
+        lm_coef = config.lm_coef
         for i, value in enumerate(train_loader, 0):
-            batch_label, batch_sentence1, batch_sentence2 = value
+            snli_label, batch_sentence1, batch_sentence2 = value
+            lm_label = batch_sentence1[:, 1:].contiguous()
 
             optimizer.zero_grad()
 
-            pred_label = snli(batch_sentence1, batch_sentence2)
-            _, indices = pred_label.max(1)
-            # print(indices)
-            loss = loss_fn(pred_label, batch_label)
+            lm_logit, snli_logit = snli(batch_sentence1)
+
+            lm_loss = lm_loss_fn(lm_logit.view(-1, lm_logit.size(2)), lm_label.view(-1))
+            snli_loss = snli_loss_fn(snli_logit, snli_label)
+
+            if 0 < lm_coef:
+                loss = snli_loss + lm_coef * lm_loss
+            else:
+                loss = snli_loss
+
             loss.backward()
             # optimizer.step()
             optimizer.step_and_update_lr()
@@ -78,10 +90,10 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         #
         valid_match = []
         for i, value in enumerate(valid_loader, 0):
-            batch_label, batch_sentence1, batch_sentence2 = value
-            pred_label = snli(batch_sentence1, batch_sentence2)
-            _, indices = pred_label.max(1)
-            match = torch.eq(indices, batch_label).detach()
+            snli_label, batch_sentence1, batch_sentence2 = value
+            lm_logit, snli_logit = snli(batch_sentence1)
+            _, indices = snli_logit.max(1)
+            match = torch.eq(indices, snli_label).detach()
             valid_match.extend(match.cpu())
         valid_accuracy = np.sum(valid_match) * 100 / len(valid_match)
         valid_score.append(valid_accuracy)
@@ -91,10 +103,10 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         #
         test_match = []
         for i, value in enumerate(test_loader, 0):
-            batch_label, batch_sentence1, batch_sentence2 = value
-            pred_label = snli(batch_sentence1, batch_sentence2)
-            _, indices = pred_label.max(1)
-            match = torch.eq(indices, batch_label).detach()
+            snli_label, batch_sentence1, batch_sentence2 = value
+            lm_logit, snli_logit = snli(batch_sentence1)
+            _, indices = snli_logit.max(1)
+            match = torch.eq(indices, snli_label).detach()
             test_match.extend(match.cpu())
         test_accuracy = np.sum(test_match) * 100 / len(test_match)
         test_score.append(test_accuracy)
@@ -119,7 +131,8 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
 
 def main():
     # config = cfg.Config.load("config.hbmp.json")
-    config = cfg.Config.load("config.transformer.json")
+    # config = cfg.Config.load("config.transformer.json")
+    config = cfg.Config.load("config.gpt.json")
 
     vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1 = data.load_data("data/snli_data.pkl")
     # datas = [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]
@@ -135,7 +148,7 @@ def main():
     config.i_pad = vocab["<pad>"]
 
     train_loader = build_tensor(train_label, datas[0], datas[1], config.device, config.n_batch)
-    # train_loader = build_tensor(test_label, datas[4], datas[5], config.device, config.n_batch) ## only for fast test
+    # train_loader = build_tensor(test_label, datasㅊ[4], datas[5], config.device, config.n_batch) ## only for fast test
     valid_loader = build_tensor(valid_label, datas[2], datas[3], config.device, config.n_batch)
     test_loader = build_tensor(test_label, datas[4], datas[5], config.device, config.n_batch)
 
