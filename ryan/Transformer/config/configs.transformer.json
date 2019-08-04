@@ -5,11 +5,11 @@
   "embed_file": "d",
   "training_ratio": 0.8,
   "max_len": 128,
-  "batch_size": 16,
+  "batch_size": 8,
   "num_iters": 7,
   "learning_rate": 0.001,
   "seed": 42,
-  "data_out": "data_out/",
+  "output_dir": "data_out/",
   "epoch": 10,
   "batch": 4,
   "n_embd": 768,
@@ -20,5 +20,9 @@
   "resid_pdrop": 0.1,
   "afn": "gelu",
   "clf_pdrop": 0.1,
-  "data_path": "../data/snli/"
+  "data_path": "../data/snli/",
+  "gradient_accumulation_steps": 1,
+  "max_steps": 1,
+  "num_train_epochs": 3,
+  "lm_coef": 0.9
 }
