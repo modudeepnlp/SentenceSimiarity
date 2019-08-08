@@ -113,8 +113,11 @@
   - test: 73.198
 
 
-# GPT
-0.0  : epoch: 19, loss: 0.374, dev: 79.405, test: 79.357
-0.5  : epoch: 14, loss: 2.022, dev: 81.975, test: 82.095
-0.5:~10, 0:~ : 
-0.05 : 
+# GPT (Decoder)
+0.0  : epoch: 15, loss: 0.423, dev: 76.306, test: 77.372
+0.5  : epoch: 18, loss: 1.932, dev: 82.920, test: 82.339
+
+# GPT (Encoder)
+0.0  : epoch: 14, loss: 0.406, dev: 78.958, test: 79.601
+0.5  : epoch: 24, loss: 0.404, dev: 81.731, test: 82.156
+ 
