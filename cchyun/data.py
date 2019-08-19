@@ -3,6 +3,9 @@ import collections
 import numpy as np
 import pickle
 
+import torch
+import torch.utils.data
+
 
 # label index 정의
 label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
@@ -103,27 +106,75 @@ def dump_data(train, valid, test, save):
 
     vocab = build_vocab([train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2])
 
-    data_i = [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]
-    data_s = []
-    for data in data_i:
-        data_s.append(text_to_index(vocab, data))
-
-    data_c = []
-    for i in range(0, len(data_s), 2):
-        data_c.append(index_concat(vocab, data_s[i], data_s[i + 1]))
-        data_c.append(index_concat(vocab, data_s[i + 1], data_s[i]))
+    datas = []
+    for data in [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]:
+        datas.append(text_to_index(vocab, data))
     
-    data_s = index_pad(vocab, data_s)
-    data_c = index_pad(vocab, data_c)
+    max_sentence1 = 0
+    for i in range(0, len(datas), 2):
+        for line in datas[i]:
+            max_sentence1 = max(max_sentence1, len(line) + 2)
+    
+    max_sentence2 = 0
+    for i in range(1, len(datas), 2):
+        for line in datas[i]:
+            max_sentence2 = max(max_sentence2, len(line) + 2)
+    
+    max_sentence_all = 0
+    for i in range(0, len(datas), 2):
+        for j in range(len(datas[i])):
+            max_sentence_all = max(max_sentence_all, len(datas[i][j]) + len(datas[i + 1][j]) + 3)
+    
+    print(max_sentence1, max_sentence2, max_sentence_all)
 
     with open(save, 'wb') as f:
-        pickle.dump((vocab, train_label, data_s[0], data_s[1], data_c[0], data_c[1], valid_label, data_s[2], data_s[3], data_c[2], data_c[3], test_label, data_s[4], data_s[5], data_c[4], data_c[5]), f)
+        pickle.dump((vocab, train_label, datas[0], datas[1], valid_label, datas[2], datas[3], test_label, datas[4], datas[5], max_sentence1, max_sentence2, max_sentence_all), f)
 
 
 def load_data(file):
     with open(file, 'rb') as f:
-        vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1 = pickle.load(f)
-    return vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1
+        vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = pickle.load(f)
+    return vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all
+
+
+class SimDataset(torch.utils.data.Dataset):
+    def __init__(self, labels, sentence1s, sentence2s, device):
+        self.i_bos = 2 # bos
+        self.i_dlm = 3 # dlm
+        self.i_eos = 4 # eos
+        self.labels = labels
+        self.sentence1s = sentence1s
+        self.sentence2s = sentence2s
+        self.device = device
+    
+    def __len__(self):
+        assert len(self.sentence1s) == len(self.sentence2s)
+        return len(self.sentence1s)
+    
+    def __getitem__(self, uid):
+        label = self.labels[uid]
+        sentence1 = self.sentence1s[uid]
+        sentence2 = self.sentence2s[uid]
+        sentence = []
+        sentence.append(self.i_bos)
+        sentence.extend(sentence1)
+        sentence.append(self.i_dlm)
+        sentence.extend(sentence2)
+        sentence.append(self.i_eos)
+        return torch.tensor(uid).to(self.device), torch.tensor(label).to(self.device), torch.tensor(sentence).to(self.device)
+
+
+def collate_fn(inputs):
+    uids, labels, sentence = list(zip(*inputs))
+
+    sentence = torch.nn.utils.rnn.pad_sequence(sentence, batch_first=True, padding_value=0)
+
+    batch = [
+        torch.stack(uids, dim=0),
+        torch.stack(labels, dim=0),
+        sentence,
+    ]
+    return batch
 
 
 if __name__ == "__main__":

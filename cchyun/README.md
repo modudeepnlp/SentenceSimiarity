@@ -114,8 +114,19 @@
 
 
 # GPT (Decoder)
-0.0  : epoch: 15, loss: 0.423, dev: 76.306, test: 77.372
-0.5  : epoch: 18, loss: 1.932, dev: 82.920, test: 82.339
+0.0   : epoch: 15, loss: 0.423, dev: 76.306, test: 77.372
+0.5   : epoch: 18, loss: 1.932, dev: 82.920, test: 82.339
+GPT2  : epoch: 20, loss: 1.907, dev: 82.260, test: 82.044
+LAST  : epoch: 34, loss: 1.927, dev: 83.448, test: 83.377
+FIRST : 학습안됨
+MAX   : epoch: 50, loss: 1.920, dev: 83.164, test: 83.143
+MEAN  : epoch: 25, loss: 2.010, dev: 81.996, test: 82.685
+{'n_layer': 6, 'd_embed': 256, 'i_pad': 0, 'd_ff': 1024, 'n_heads': 8, 'd_k': 32, 'd_v': 32, n_batch: 256}
+        epoch: 49, loss, 1.686, dev: 84.495, test: 84.171
+{''n_layer': 6, 'd_embed': 512, 'i_pad': 0, 'd_ff': 2048, 'n_heads': 8, 'd_k': 64, 'd_v': 64,'n_batch': 192}
+        epoch: 48, loss: 1.553, dev: 85.277, test: 84.884
+add layer-normal
+        epoch: 48, loss: 1.553, dev: 85.247, test: 84.731
 
 # GPT (Encoder)
 0.0  : epoch: 14, loss: 0.406, dev: 78.958, test: 79.601

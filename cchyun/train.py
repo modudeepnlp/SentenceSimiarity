@@ -17,12 +17,11 @@ import torch
 import torch.utils.data
 
 
-def build_tensor(label, sentence1, sentence2, device, batch_size):
+def build_tensor(label, sentence1s, sentence2s, device, batch_size):
     torch_labe = torch.tensor(label, dtype=torch.long).to(device)
-    torch_sentence1 = torch.tensor(sentence1, dtype=torch.long).to(device)
-    torch_sentence2 = torch.tensor(sentence2, dtype=torch.long).to(device)
-    dataset = torch.utils.data.TensorDataset(torch_labe, torch_sentence1, torch_sentence2)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    dataset = data.SimDataset(label, sentence1s, sentence2s, device)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=data.collate_fn)
     return loader
 
 
@@ -62,12 +61,12 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         train_loss = 0
         lm_coef = config.lm_coef
         for i, value in enumerate(train_loader, 0):
-            snli_label, batch_sentence1, batch_sentence2 = value
-            lm_label = batch_sentence1[:, 1:].contiguous()
+            uids, snli_label, sentences = value
+            lm_label = sentences[:, 1:].contiguous()
 
             optimizer.zero_grad()
 
-            lm_logit, snli_logit = snli(batch_sentence1)
+            lm_logit, snli_logit = snli(sentences)
 
             lm_loss = lm_loss_fn(lm_logit.view(-1, lm_logit.size(2)), lm_label.view(-1))
             snli_loss = snli_loss_fn(snli_logit, snli_label)
@@ -90,8 +89,8 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         #
         valid_match = []
         for i, value in enumerate(valid_loader, 0):
-            snli_label, batch_sentence1, batch_sentence2 = value
-            lm_logit, snli_logit = snli(batch_sentence1)
+            uids, snli_label, sentences = value
+            lm_logit, snli_logit = snli(sentences)
             _, indices = snli_logit.max(1)
             match = torch.eq(indices, snli_label).detach()
             valid_match.extend(match.cpu())
@@ -103,8 +102,8 @@ def train_model(config, train_loader, valid_loader, test_loader, log=True):
         #
         test_match = []
         for i, value in enumerate(test_loader, 0):
-            snli_label, batch_sentence1, batch_sentence2 = value
-            lm_logit, snli_logit = snli(batch_sentence1)
+            uids, snli_label, sentences = value
+            lm_logit, snli_logit = snli(sentences)
             _, indices = snli_logit.max(1)
             match = torch.eq(indices, snli_label).detach()
             test_match.extend(match.cpu())
@@ -134,23 +133,21 @@ def main():
     # config = cfg.Config.load("config.transformer.json")
     config = cfg.Config.load("config.gpt.json")
 
-    vocab, train_label, train_sentence1, train_sentence2, train_1_2, train_2_1, valid_label, valid_sentence1, valid_sentence2, valid_1_2, valid_2_1, test_label, test_sentence1, test_sentence2, test_1_2, test_2_1 = data.load_data("data/snli_data.pkl")
-    # datas = [train_sentence1, train_sentence2, valid_sentence1, valid_sentence2, test_sentence1, test_sentence2]
-    datas = [train_1_2, train_2_1, valid_1_2, valid_2_1, test_1_2, test_2_1]
+    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("data/snli_data.pkl")
 
     # cuda or cpu
     config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.n_enc_seq = max(len(datas[0][0]), len(datas[1][0]))
-    config.n_dec_seq = max(len(datas[0][0]), len(datas[1][0]))
+    config.n_enc_seq = max_sentence_all
+    config.n_dec_seq = max_sentence_all
     config.i_pad = vocab["<pad>"]
 
-    train_loader = build_tensor(train_label, datas[0], datas[1], config.device, config.n_batch)
-    # train_loader = build_tensor(test_label, datasㅊ[4], datas[5], config.device, config.n_batch) ## only for fast test
-    valid_loader = build_tensor(valid_label, datas[2], datas[3], config.device, config.n_batch)
-    test_loader = build_tensor(test_label, datas[4], datas[5], config.device, config.n_batch)
+    train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
+    # train_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
+    valid_loader = build_tensor(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
+    test_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
 
     configs = []
     configs.append(config)
