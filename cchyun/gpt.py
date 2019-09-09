@@ -1,11 +1,13 @@
 import numpy as np
+import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-# 참고: https://github.com/jadore801120/attention-is-all-you-need-pytorch
+# 참고: https://github.com/graykode/nlp-tutorial
+#      https://github.com/jadore801120/attention-is-all-you-need-pytorch
 #      https://github.com/JayParks/transformer
 #      https://github.com/modudeepnlp/code_implementation/blob/master/codes/transformer/Transformer-Torch.py
 
@@ -14,13 +16,17 @@ def get_attn_pad_mask(seq_q, seq_k, i_pad):
     batch_size, len_q = seq_q.size()
     batch_size, len_k = seq_k.size()
     pad_attn_mask = seq_k.data.eq(i_pad).unsqueeze(1).expand(batch_size, len_q, len_k)  # <pad>
-    return pad_attn_mask.bool()
+    return pad_attn_mask.byte()
 
 
 def get_attn_subsequent_mask(seq):
     subsequent_mask = torch.ones_like(seq).unsqueeze(-1).expand(seq.size(0), seq.size(1), seq.size(1))
     subsequent_mask = subsequent_mask.triu(diagonal=1) # upper triangular part of a matrix(2-D)
-    return subsequent_mask.bool()
+    return subsequent_mask.byte()
+
+
+def gelu(x):
+    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -86,12 +92,13 @@ class PoswiseFeedForwardNet(nn.Module):
 
         self.conv1 = nn.Conv1d(in_channels=self.config.d_embed, out_channels=self.config.d_ff, kernel_size=1)
         self.conv2 = nn.Conv1d(in_channels=self.config.d_ff, out_channels=self.config.d_embed, kernel_size=1)
-        
+        self.activ = gelu
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, inputs):
         # (bs, d_ff, n_seq)
-        output = F.relu(self.conv1(inputs.transpose(1, 2)))
+        output = self.activ(self.conv1(inputs.transpose(1, 2)))
+        # gelu ??
         # (bs, n_seq, d_embed)
         output = self.conv2(output).transpose(1, 2)
         output = self.dropout(output)
@@ -105,16 +112,18 @@ class EncoderLayer(nn.Module):
         self.config = config
 
         self.enc_self_attn = MultiHeadAttention(self.config)
+        # GPT2: layer normal (위치변경)
+        self.layer_norm1 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
         self.pos_ffn = PoswiseFeedForwardNet(self.config)
         # GPT2: layer normal (위치변경)
-        self.layer_norm = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
+        self.layer_norm2 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
     
     def forward(self, enc_inputs, enc_self_attn_mask):
         # (bs, n_enc_seq, d_embed), (bs, n_head, n_enc_seq, n_enc_seq)
         att_outputs, attn = self.enc_self_attn(enc_inputs, enc_inputs, enc_inputs, enc_self_attn_mask)
-        att_outputs = self.layer_norm(enc_inputs + att_outputs)
+        att_outputs = self.layer_norm1(enc_inputs + att_outputs)
         ffn_outputs = self.pos_ffn(att_outputs)
-        ffn_outputs = self.layer_norm(ffn_outputs + att_outputs)
+        ffn_outputs = self.layer_norm2(ffn_outputs + att_outputs)
         # (bs, n_enc_seq, d_embed), (bs, n_head, n_enc_seq, n_enc_seq)
         return enc_outputs, attn
 
@@ -154,16 +163,18 @@ class DecoderLayer(nn.Module):
         self.config = config
 
         self.dec_self_attn = MultiHeadAttention(self.config)
+        # GPT2: layer normal (위치변경)
+        self.layer_norm1 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
         self.pos_ffn = PoswiseFeedForwardNet(self.config)
         # GPT2: layer normal (위치변경)
-        self.layer_norm = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
+        self.layer_norm2 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
     
     def forward(self, dec_inputs, dec_self_attn_mask):
         # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
         att_outputs, dec_self_attn = self.dec_self_attn(dec_inputs, dec_inputs, dec_inputs, dec_self_attn_mask)
-        att_outputs = self.layer_norm(dec_inputs + att_outputs)
+        att_outputs = self.layer_norm1(dec_inputs + att_outputs)
         ffn_outputs = self.pos_ffn(att_outputs)
-        ffn_outputs = self.layer_norm(ffn_outputs + att_outputs)
+        ffn_outputs = self.layer_norm2(ffn_outputs + att_outputs)
         # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
         return ffn_outputs, dec_self_attn
 
@@ -197,7 +208,7 @@ class Decoder(nn.Module):
 
         dec_self_attns = []
         # GPT2: layer normal 추가
-        dec_outputs = self.layer_norm(dec_outputs)
+        # dec_outputs = self.layer_norm(dec_outputs)
         for layer in self.layers:
             # (bs, n_dec_seq, d_embed), (bs, n_dec_seq, n_dec_seq)
             dec_outputs, dec_self_attn = layer(dec_outputs, dec_self_attn_mask)
