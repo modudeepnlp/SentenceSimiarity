@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# 참고: https://github.com/jadore801120/attention-is-all-you-need-pytorch
+# 참고: https://github.com/graykode/nlp-tutorial
+#      https://github.com/jadore801120/attention-is-all-you-need-pytorch
 #      https://github.com/JayParks/transformer
 #      https://github.com/modudeepnlp/code_implementation/blob/master/codes/transformer/Transformer-Torch.py
 
