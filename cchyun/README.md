@@ -127,8 +127,14 @@ MEAN  : epoch: 25, loss: 2.010, dev: 81.996, test: 82.685
         epoch: 48, loss: 1.553, dev: 85.277, test: 84.884
 add layer-normal
         epoch: 48, loss: 1.553, dev: 85.247, test: 84.731
+        epoch: 36, loss: 1.528, dev: 85.125, test: 84.314
+gelu:
+        epoch: 38, loss: 1.615, dev: 84.830, test: 84.660
+        epoch: 90, loss: 1.462, dev: 85.704, test: 85.088
 
 # GPT (Encoder)
 0.0  : epoch: 14, loss: 0.406, dev: 78.958, test: 79.601
 0.5  : epoch: 24, loss: 0.404, dev: 81.731, test: 82.156
  
+ # BERT
+ No pretrain: epoch 48:, loss: 0.901, dev: 59.266, test: 59.986
