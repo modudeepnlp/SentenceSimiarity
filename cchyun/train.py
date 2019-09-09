@@ -17,11 +17,11 @@ import torch
 import torch.utils.data
 
 
-def build_tensor(label, sentence1s, sentence2s, device, batch_size):
+def build_loader(label, sentence1s, sentence2s, device, batch_size):
     torch_labe = torch.tensor(label, dtype=torch.long).to(device)
 
-    dataset = data.SimDataset(label, sentence1s, sentence2s, device)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=data.collate_fn)
+    dataset = data.GptDataSet(label, sentence1s, sentence2s, device)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=data.collate_fn)
     return loader
 
 
@@ -136,18 +136,19 @@ def main():
     vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("data/snli_data.pkl")
 
     # cuda or cpu
-    config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda:1")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.n_enc_seq = max_sentence_all
-    config.n_dec_seq = max_sentence_all
+    config.n_enc_seq = max_sentence_all + 3
+    config.n_dec_seq = max_sentence_all + 3
     config.i_pad = vocab["<pad>"]
 
-    train_loader = build_tensor(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
-    # train_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
-    valid_loader = build_tensor(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
-    test_loader = build_tensor(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
+    train_loader = build_loader(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
+    # train_loader = build_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
+    valid_loader = build_loader(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
+    test_loader = build_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
 
     configs = []
     configs.append(config)
