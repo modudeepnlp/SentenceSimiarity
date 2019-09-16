@@ -66,7 +66,7 @@ def train_model(config, vocab, model, train_data_list):
         all_indices = []
         for i in range(len(train_data_list)):
             all_indices += [i] * len(train_data_list[i])
-        random.shuffle(all_indices)
+        # random.shuffle(all_indices)
         train_epoch(epoch, model, optimizer, all_indices, train_iters)
 
         model.save("mtdnn_final.pth")
@@ -83,7 +83,8 @@ def main():
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.i_pad = vocab["<pad>"]
-    config.n_epoch = 1
+    config.n_batch = 128
+    config.n_epoch = 10
 
     task_defs = mtdnn_data.TaskDefs("mtdnn_task_def.yml")
     
@@ -91,6 +92,9 @@ def main():
     if os.path.isfile("mtdnn_final.pth"):
         model.load("mtdnn_final.pth")
         print(">>>> load state dict from: ", "mtdnn_final.pth")
+    elif os.path.isfile("bert_pretrain_final.pth"):
+        model.bert.load("bert_pretrain_final.pth")
+        print(">>>> load state dict from: ", "bert_pretrain_final.pth")
     model.to(config.device)
 
     datasets = ["cola", "mnli", "mrpc", "qnli", "qqp", "rte", "scitail", "snli", "sst", "stsb", "wnli"]

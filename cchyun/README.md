@@ -138,3 +138,4 @@ gelu:
  
  # BERT
  No pretrain: epoch 48:, loss: 0.901, dev: 59.266, test: 59.986
+    pretrain: epoch: 10, loss, 0.453, dev: 82.615, test: 82.593

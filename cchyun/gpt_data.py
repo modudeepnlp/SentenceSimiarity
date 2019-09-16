@@ -3,6 +3,7 @@ from pathlib import Path
 from tqdm import tqdm, trange
 from tempfile import TemporaryDirectory
 import shelve
+import copy
 from multiprocessing import Pool
 
 from random import random, randrange, randint, shuffle, choice
@@ -185,7 +186,7 @@ def create_instances_from_document(
     (rather than each document) has an equal chance of being sampled as a false example for the NextSentence task."""
     document = doc_database[doc_idx]
     # Account for <cls>, <sep>, <sep>
-    max_num_tokens = max_seq_length - 3
+    max_num_tokens = max_seq_length - 4
 
     # We *usually* want to fill up the entire sequence since we are padding
     # to `max_seq_length` anyways, so short sequences are generally wasted
@@ -255,15 +256,17 @@ def create_instances_from_document(
                 assert len(tokens_a) >= 1
                 assert len(tokens_b) >= 1
 
-                tokens = ["<cls>"] + tokens_a + ["<sep>"] + tokens_b + ["<sep>"]
+                tokens = ["<cls>"] + ["<sep>"] + tokens_a + ["<sep>"] + tokens_b + ["<sep>"]
+                lm_labels = copy.deepcopy(tokens)
                 # The segment IDs are 0 for the <cls> token, the A tokens and the first <sep>
                 # They are 1 for the B tokens and the final <sep>
-                segment_ids = [0 for _ in range(len(tokens_a) + 2)] + [1 for _ in range(len(tokens_b) + 1)]
+                segment_ids = [0, 0] + [1 for _ in range(len(tokens_a) + 1)] + [2 for _ in range(len(tokens_b) + 1)]
 
                 tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
                     tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab)
 
                 instance = {
+                    "lm_labels": lm_labels,
                     "tokens": tokens,
                     "segment_ids": segment_ids,
                     "is_random_next": is_random_next,
@@ -278,7 +281,7 @@ def create_instances_from_document(
 
 
 def create_training_file(docs, vocab, args, epoch_num):
-    epoch_filename = args.output_dir / "bert_epoch_{}_data.json".format(epoch_num)
+    epoch_filename = args.output_dir / "gpt_epoch_{}_data.json".format(epoch_num)
     num_instances = 0
     with epoch_filename.open('w') as epoch_file:
         for doc_idx in trange(len(docs), desc="Document"):
@@ -290,7 +293,7 @@ def create_training_file(docs, vocab, args, epoch_num):
             for instance in doc_instances:
                 epoch_file.write(instance + '\n')
                 num_instances += 1
-    metrics_file = args.output_dir / "bert_epoch_{}_metrics.json".format(epoch_num)
+    metrics_file = args.output_dir / "gpt_epoch_{}_metrics.json".format(epoch_num)
     with metrics_file.open('w') as metrics_file:
         metrics = {
             "num_training_examples": num_instances,
@@ -360,15 +363,20 @@ def convert_tokens_to_ids(vocab, tokens):
 
 
 def convert_example_to_features(example, vocab, max_seq_length):
+    lm_labels = example["lm_abels"]
     tokens = example["tokens"]
     segment_ids = example["segment_ids"]
     is_random_next = example["is_random_next"]
     masked_lm_positions = example["masked_lm_positions"]
     masked_lm_labels = example["masked_lm_labels"]
 
-    assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
+    assert len(lm_labels) == len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
+    lm_label_ids = convert_tokens_to_ids(vocab, lm_labels)
     input_ids = convert_tokens_to_ids(vocab, tokens)
     masked_label_ids = convert_tokens_to_ids(vocab, masked_lm_labels)
+
+    lm_label_array = np.zeros(max_seq_length, dtype=np.int)
+    lm_label_array[:len(lm_label_ids)] = lm_label_ids
 
     input_array = np.zeros(max_seq_length, dtype=np.int)
     input_array[:len(input_ids)] = input_ids
@@ -376,13 +384,14 @@ def convert_example_to_features(example, vocab, max_seq_length):
     segment_array = np.zeros(max_seq_length, dtype=np.bool)
     segment_array[:len(segment_ids)] = segment_ids
 
-    lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
-    lm_label_array[masked_lm_positions] = masked_label_ids
+    # lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
+    # lm_label_array[masked_lm_positions] = masked_label_ids
 
     return cfg.Config({
+        "lm_label_ids": lm_label_array,
         "input_ids": input_array,
         "segment_ids": segment_array,
-        "lm_label_ids": lm_label_array,
+        # "lm_label_ids": lm_label_array,
         "is_next": is_random_next
     })
 
@@ -392,8 +401,8 @@ class PregeneratedDataset(torch.utils.data.Dataset):
         self.vocab = vocab
         self.epoch = epoch
         self.data_epoch = epoch % num_data_epochs
-        data_file = training_path / f"bert_epoch_{self.data_epoch}_data.json"
-        metrics_file = training_path / f"bert_epoch_{self.data_epoch}_metrics.json"
+        data_file = training_path / f"gpt_epoch_{self.data_epoch}_data.json"
+        metrics_file = training_path / f"gpt_epoch_{self.data_epoch}_metrics.json"
         assert data_file.is_file() and metrics_file.is_file()
         metrics = json.loads(metrics_file.read_text())
         num_samples = metrics['num_training_examples']
@@ -403,19 +412,22 @@ class PregeneratedDataset(torch.utils.data.Dataset):
         if reduce_memory:
             self.temp_dir = TemporaryDirectory()
             self.working_dir = Path(self.temp_dir.name)
+            lm_label_ids = np.memmap(filename=self.working_dir/'lm_label_ids.memmap',
+                                  mode='w+', dtype=np.int32, shape=(num_samples, seq_len))
             input_ids = np.memmap(filename=self.working_dir/'input_ids.memmap',
                                   mode='w+', dtype=np.int32, shape=(num_samples, seq_len))
             segment_ids = np.memmap(filename=self.working_dir/'segment_ids.memmap',
                                     shape=(num_samples, seq_len), mode='w+', dtype=np.bool)
-            lm_label_ids = np.memmap(filename=self.working_dir/'lm_label_ids.memmap',
-                                     shape=(num_samples, seq_len), mode='w+', dtype=np.int32)
-            lm_label_ids[:] = -1
+            # lm_label_ids = np.memmap(filename=self.working_dir/'lm_label_ids.memmap',
+            #                          shape=(num_samples, seq_len), mode='w+', dtype=np.int32)
+            # lm_label_ids[:] = -1
             is_nexts = np.memmap(filename=self.working_dir/'is_nexts.memmap',
                                  shape=(num_samples,), mode='w+', dtype=np.bool)
         else:
+            lm_label_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.int32)
             input_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.int32)
             segment_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
-            lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
+            # lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
             is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
         logging.info(f"Loading training examples for epoch {epoch}")
         with data_file.open() as f:
@@ -446,7 +458,7 @@ class PregeneratedDataset(torch.utils.data.Dataset):
                 torch.tensor(self.is_nexts[item].astype(np.int64)))
 
 
-class BertDataSet(torch.utils.data.Dataset):
+class GptDataSet(torch.utils.data.Dataset):
     def __init__(self, labels, sentence1s, sentence2s, device):
         self.i_bos = 3 # bos
         self.i_cls = 4 # cls
@@ -467,13 +479,15 @@ class BertDataSet(torch.utils.data.Dataset):
         sentence2 = self.sentence2s[uid]
         sentence = []
         sentence.append(self.i_cls)
+        sentence.append(self.i_sep)
         sentence.extend(sentence1)
         sentence.append(self.i_sep)
         sentence.extend(sentence2)
         sentence.append(self.i_sep)
         segment = []
-        segment.extend([0] * (len(sentence1) + 2))
-        segment.extend([1] * (len(sentence2) + 1))
+        segment.extend([0, 0])
+        segment.extend([1] * (len(sentence1) + 1))
+        segment.extend([2] * (len(sentence2) + 1))
         return torch.tensor(uid).to(self.device), torch.tensor(label).to(self.device), torch.tensor(sentence).to(self.device), torch.tensor(segment).to(self.device)
 
 
@@ -487,7 +501,7 @@ def build_pretrain_loader(epoch, vocab, n_batch):
 def build_data_loader(label, sentence1s, sentence2s, device, batch_size):
     torch_labe = torch.tensor(label, dtype=torch.long).to(device)
 
-    dataset = BertDataSet(label, sentence1s, sentence2s, device)
+    dataset = GptDataSet(label, sentence1s, sentence2s, device)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
     return loader
 
@@ -508,5 +522,6 @@ def collate_fn(inputs):
 
 if __name__ == '__main__':
     # make_corpus()
-    make_pretrain()
+    # make_pretrain()
+    pass
 

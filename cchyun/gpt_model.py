@@ -186,18 +186,19 @@ class Decoder(nn.Module):
 
         self.dec_emb = nn.Embedding(self.config.n_dec_vocab, self.config.d_embed)
         self.pos_emb = nn.Embedding(self.config.n_dec_seq + 1, self.config.d_embed)
+        self.seg_emb = nn.Embedding(3, self.config.d_embed)
 
         self.layers = nn.ModuleList([DecoderLayer(self.config) for _ in range(self.config.n_layer)])
 
         # GPT2: layer normal 추가
         self.layer_norm = nn.LayerNorm(config.d_embed, eps=config.layer_norm_epsilon)
     
-    def forward(self, dec_inputs):
+    def forward(self, dec_inputs, dec_segs):
         positions = torch.arange(dec_inputs.size(1), device=dec_inputs.device, dtype=dec_inputs.dtype).expand(dec_inputs.size(0), dec_inputs.size(1)) + 1
         pos_mask = dec_inputs.eq(self.config.i_pad)
         positions.masked_fill_(pos_mask, 0)
         # (bs, n_dec_seq, d_embed)
-        dec_outputs = self.dec_emb(dec_inputs) + self.pos_emb(positions)
+        dec_outputs = self.dec_emb(dec_inputs) + self.pos_emb(positions) + self.seg_emb(dec_segs)
 
         # (bs, n_dec_seq, n_dec_seq)
         dec_attn_pad_mask = get_attn_pad_mask(dec_inputs, dec_inputs, self.config.i_pad)
@@ -215,32 +216,48 @@ class Decoder(nn.Module):
             dec_self_attns.append(dec_self_attn)
         # (bs, n_dec_seq, d_embed), [(bs, n_dec_seq, n_dec_seq)]
         return dec_outputs, dec_self_attns
+    
+    def save(self, path):
+        torch.save({
+            "state_dict": self.state_dict()
+        }, path)
+    
+    def load(self, path):
+        save = torch.load(path)
+        self.load_state_dict(save["state_dict"])
 
 
-class SNLIEncoder(nn.Module):
+class GPTPretrain(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
-        self.encoder = Encoder(self.config)
+        self.decoder = Decoder(self.config)
 
-        self.projection_lm = nn.Linear(self.config.d_embed, self.config.n_enc_vocab, bias=False)
+        self.projection_lm = nn.Linear(self.config.d_embed, self.config.n_dec_vocab, bias=False)
         # tie_weights
-        self.projection_lm.weight = self.encoder.enc_emb.weight
+        self.projection_lm.weight = self.decoder.dec_emb.weight
 
-        self.projection_snli = nn.Linear(config.n_enc_seq * config.d_embed, config.n_output)
+        self.projection_ns = nn.Linear(config.d_embed, 2)
+
+        self.dropout = nn.Dropout(config.dropout)
      
-    def forward(self, sentence):
-        # (bs, n_enc_seq, d_embed) -> (bs, n_enc_seq * d_embed)
-        sentence_ctx, _ = self.encoder(sentence)
-
-        lm_logit = self.projection_lm(sentence_ctx)
-        snli_logit = self.projection_snli(sentence_ctx.view(sentence_ctx.size()[0], -1))
+    def forward(self, sentences, segments):
+        # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
+        sentence_ctx, _ = self.decoder(sentences, segments)
         
-        return lm_logit[:, :-1, :].contiguous(), snli_logit
+        lm_logit = self.projection_lm(sentence_ctx)
+
+        ns_logit = sentence_ctx[:, 0]
+        ns_logit = self.dropout(ns_logit)
+        ns_logit = self.projection_ns(ns_logit)
+        ns_logit = torch.tanh(ns_logit)
+        ns_logit = self.dropout(ns_logit)
+        
+        return lm_logit[:, 1:-1, :].contiguous(), ns_logit
 
 
-class SNLIDecoder(nn.Module):
+class SNLI(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -255,30 +272,26 @@ class SNLIDecoder(nn.Module):
 
         self.dropout = nn.Dropout(config.dropout)
      
-    def forward(self, sentence):
+    def forward(self, sentences, segments):
         # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
-        sentence_ctx, _ = self.decoder(sentence)
+        sentence_ctx, _ = self.decoder(sentences, segments)
         
         lm_logit = self.projection_lm(sentence_ctx)
 
-        # GPT SequenceSummary
-        # first
-        # snli_logit = sentence_ctx[:, 0]
-        # last
-        snli_logit = sentence_ctx[:, -1]
-        # max
-        # snli_logit, _ = torch.max(sentence_ctx, dim=1)
-        # mean
-        # snli_logit = torch.mean(sentence_ctx, dim=1)
+        snli_logit = sentence_ctx[:, 0]
         snli_logit = self.dropout(snli_logit)
         snli_logit = self.projection_snli(snli_logit)
         snli_logit = torch.tanh(snli_logit)
         snli_logit = self.dropout(snli_logit)
         
-        return lm_logit[:, :-1, :].contiguous(), snli_logit
-
-
-class SNLI(SNLIDecoder):
-    def __init__(self, config):
-        super().__init__(config)
+        return lm_logit[:, 1:-1, :].contiguous(), snli_logit
+    
+    def save(self, path):
+        torch.save({
+            "state_dict": self.state_dict()
+        }, path)
+    
+    def load(self, path):
+        save = torch.load(path)
+        self.load_state_dict(save["state_dict"])
 
