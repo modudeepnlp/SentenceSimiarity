@@ -248,13 +248,13 @@ class GPTPretrain(nn.Module):
         
         lm_logit = self.projection_lm(sentence_ctx)
 
-        ns_logit = sentence_ctx[:, 0]
+        ns_logit = sentence_ctx[:, -1]
         ns_logit = self.dropout(ns_logit)
         ns_logit = self.projection_ns(ns_logit)
         ns_logit = torch.tanh(ns_logit)
         ns_logit = self.dropout(ns_logit)
         
-        return lm_logit[:, 1:-1, :].contiguous(), ns_logit
+        return lm_logit[:, :-1, :].contiguous(), ns_logit
 
 
 class SNLI(nn.Module):
@@ -278,13 +278,13 @@ class SNLI(nn.Module):
         
         lm_logit = self.projection_lm(sentence_ctx)
 
-        snli_logit = sentence_ctx[:, 0]
+        snli_logit = sentence_ctx[:, -1]
         snli_logit = self.dropout(snli_logit)
         snli_logit = self.projection_snli(snli_logit)
         snli_logit = torch.tanh(snli_logit)
         snli_logit = self.dropout(snli_logit)
         
-        return lm_logit[:, 1:-1, :].contiguous(), snli_logit
+        return lm_logit[:, :-1, :].contiguous(), snli_logit
     
     def save(self, path):
         torch.save({

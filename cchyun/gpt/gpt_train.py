@@ -23,13 +23,13 @@ def eval_epoch(model, data_loader, mode):
 
     with tqdm(total=len(data_loader), desc=f"{mode}") as pbar:
         for i, value in enumerate(data_loader):
-            uids, label, sentences, segments = value
-            lm_label = sentences[:, 2:].contiguous()
+            uids, snli_label, sentences, segments = value
+            lm_label = sentences[:, 1:].contiguous()
 
-            lm_logit, snli_logit =  = model(sentences, segments)
+            lm_logit, snli_logit = model(sentences, segments)
             _, indices = snli_logit.max(1)
 
-            match = torch.eq(indices, label).detach()
+            match = torch.eq(indices, snli_label).detach()
             matchs.extend(match.cpu())
             accuracy = np.sum(matchs) * 100 / len(matchs) if 0 < len(matchs) else 0
 
@@ -44,8 +44,8 @@ def train_epoch(epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data
 
     with tqdm(total=len(data_loader), desc=f"Train {epoch}") as pbar:
         for i, value in enumerate(data_loader):
-            uids, label, sentences, segments = value
-            lm_label = sentences[:, 2:].contiguous()
+            uids, snli_label, sentences, segments = value
+            lm_label = sentences[:, 1:].contiguous()
 
             optimizer.zero_grad()
 
@@ -58,7 +58,7 @@ def train_epoch(epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data
             else:
                 loss = snli_loss
         
-            loss_val = loss.item()
+            loss_val = snli_loss.item()
             losses.append(loss_val)
 
             loss.backward()
@@ -107,7 +107,7 @@ def main():
         model.load("gpt_final.pth")
         print(">>>> load state dict from: ", "gpt_final.pth")
     elif os.path.isfile("gpt_pretrain_final.pth"):
-        model.gpt.load("gpt_pretrain_final.pth")
+        model.decoder.load("gpt_pretrain_final.pth")
         print(">>>> load state dict from: ", "gpt_pretrain_final.pth")
     model.to(config.device)
 

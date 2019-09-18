@@ -185,8 +185,8 @@ def create_instances_from_document(
     Also, documents are sampled proportionally to the number of sentences they contain, which means each sentence
     (rather than each document) has an equal chance of being sampled as a false example for the NextSentence task."""
     document = doc_database[doc_idx]
-    # Account for <cls>, <sep>, <sep>
-    max_num_tokens = max_seq_length - 4
+    # Account for <sep>, <sep>, <sep>
+    max_num_tokens = max_seq_length - 3
 
     # We *usually* want to fill up the entire sequence since we are padding
     # to `max_seq_length` anyways, so short sequences are generally wasted
@@ -256,11 +256,11 @@ def create_instances_from_document(
                 assert len(tokens_a) >= 1
                 assert len(tokens_b) >= 1
 
-                tokens = ["<cls>"] + ["<sep>"] + tokens_a + ["<sep>"] + tokens_b + ["<sep>"]
+                tokens = ["<sep>"] + tokens_a + ["<sep>"] + tokens_b + ["<sep>"]
                 lm_labels = copy.deepcopy(tokens)
                 # The segment IDs are 0 for the <cls> token, the A tokens and the first <sep>
                 # They are 1 for the B tokens and the final <sep>
-                segment_ids = [0, 0] + [1 for _ in range(len(tokens_a) + 1)] + [2 for _ in range(len(tokens_b) + 1)]
+                segment_ids = [1 for _ in range(len(tokens_a) + 2)] + [2 for _ in range(len(tokens_b) + 1)]
 
                 tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
                     tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab)
@@ -363,7 +363,7 @@ def convert_tokens_to_ids(vocab, tokens):
 
 
 def convert_example_to_features(example, vocab, max_seq_length):
-    lm_labels = example["lm_abels"]
+    lm_labels = example["lm_labels"]
     tokens = example["tokens"]
     segment_ids = example["segment_ids"]
     is_random_next = example["is_random_next"]
@@ -375,8 +375,8 @@ def convert_example_to_features(example, vocab, max_seq_length):
     input_ids = convert_tokens_to_ids(vocab, tokens)
     masked_label_ids = convert_tokens_to_ids(vocab, masked_lm_labels)
 
-    lm_label_array = np.zeros(max_seq_length, dtype=np.int)
-    lm_label_array[:len(lm_label_ids)] = lm_label_ids
+    # lm_label_array = np.zeros(max_seq_length, dtype=np.int)
+    # lm_label_array[:len(lm_label_ids)] = lm_label_ids
 
     input_array = np.zeros(max_seq_length, dtype=np.int)
     input_array[:len(input_ids)] = input_ids
@@ -384,14 +384,14 @@ def convert_example_to_features(example, vocab, max_seq_length):
     segment_array = np.zeros(max_seq_length, dtype=np.bool)
     segment_array[:len(segment_ids)] = segment_ids
 
-    # lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
-    # lm_label_array[masked_lm_positions] = masked_label_ids
+    lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
+    lm_label_array[masked_lm_positions] = masked_label_ids
 
     return cfg.Config({
-        "lm_label_ids": lm_label_array,
+        # "lm_label_ids": lm_label_array,
         "input_ids": input_array,
         "segment_ids": segment_array,
-        # "lm_label_ids": lm_label_array,
+        "lm_label_ids": lm_label_array,
         "is_next": is_random_next
     })
 
@@ -431,7 +431,7 @@ class PregeneratedDataset(torch.utils.data.Dataset):
             is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
         logging.info(f"Loading training examples for epoch {epoch}")
         with data_file.open() as f:
-            for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
+            for i, line in enumerate(tqdm(f, total=num_samples, desc=f"Loading {data_file}")):
                 line = line.strip()
                 example = json.loads(line)
                 features = convert_example_to_features(example, vocab, seq_len)
@@ -478,15 +478,13 @@ class GptDataSet(torch.utils.data.Dataset):
         sentence1 = self.sentence1s[uid]
         sentence2 = self.sentence2s[uid]
         sentence = []
-        sentence.append(self.i_cls)
         sentence.append(self.i_sep)
         sentence.extend(sentence1)
         sentence.append(self.i_sep)
         sentence.extend(sentence2)
         sentence.append(self.i_sep)
         segment = []
-        segment.extend([0, 0])
-        segment.extend([1] * (len(sentence1) + 1))
+        segment.extend([1] * (len(sentence1) + 2))
         segment.extend([2] * (len(sentence2) + 1))
         return torch.tensor(uid).to(self.device), torch.tensor(label).to(self.device), torch.tensor(sentence).to(self.device), torch.tensor(segment).to(self.device)
 
@@ -522,6 +520,6 @@ def collate_fn(inputs):
 
 if __name__ == '__main__':
     # make_corpus()
-    # make_pretrain()
+    make_pretrain()
     pass
 

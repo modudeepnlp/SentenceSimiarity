@@ -25,7 +25,7 @@ def train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, data_lo
         for i, value in enumerate(data_loader):
             value = tuple(t.to(config.device) for t in value)
             input_ids, segment_ids, lm_label_ids, is_next = value
-            lm_label = lm_label_ids[:, 2:].contiguous()
+            lm_label = lm_label_ids[:, 1:].contiguous()
 
             optimizer.zero_grad()
 
@@ -45,8 +45,8 @@ def train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, data_lo
 
 
 def train_model(config, vocab, model):
-    lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=config.i_pad, reduction='mean')
-    ns_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
+    lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
+    ns_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
     optimizer = optim.ScheduledOptim(
         torch.optim.Adam(filter(lambda x: x.requires_grad, model.parameters()), betas=(0.9, 0.98), eps=1e-09),
         # torch.optim.SGD(filter(lambda x: x.requires_grad, model.parameters()), lr=0.0001),
@@ -72,7 +72,7 @@ def main():
     config.n_dec_vocab = len(vocab)
     config.i_pad = vocab["<pad>"]
     config.n_batch = 64
-    config.n_epoch = 10
+    config.n_epoch = 2
 
     model = gpt_model.GPTPretrain(config)
     if os.path.isfile("gpt_pretrain_final.pth"):
