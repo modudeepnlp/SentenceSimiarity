@@ -217,14 +217,16 @@ class Decoder(nn.Module):
         # (bs, n_dec_seq, d_embed), [(bs, n_dec_seq, n_dec_seq)]
         return dec_outputs, dec_self_attns
     
-    def save(self, path):
+    def save(self, epoch, path):
         torch.save({
+            "epoch": epoch,
             "state_dict": self.state_dict()
         }, path)
     
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
+        return save["epoch"]
 
 
 class GPTPretrain(nn.Module):
@@ -286,12 +288,16 @@ class SNLI(nn.Module):
         
         return lm_logit[:, :-1, :].contiguous(), snli_logit
     
-    def save(self, path):
+    def save(self, epoch, score_val, score_test, path):
         torch.save({
+            "epoch": epoch,
+            "score_val": score_val,
+            "score_test": score_test,
             "state_dict": self.state_dict()
         }, path)
     
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
+        return save["epoch"], save["score_val"], save["score_test"]
 

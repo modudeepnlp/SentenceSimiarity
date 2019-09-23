@@ -490,7 +490,7 @@ class GptDataSet(torch.utils.data.Dataset):
 
 
 def build_pretrain_loader(epoch, vocab, n_batch):
-    dataset = PregeneratedDataset(Path("data/"), epoch, vocab, 10, reduce_memory=True)
+    dataset = PregeneratedDataset(Path("../data/"), epoch, vocab, 10, reduce_memory=True)
     sampler = torch.utils.data.RandomSampler(dataset)
     dataloader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=n_batch)
     return dataloader

@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 import pickle, os, random, collections
 import numpy as np
 import pandas as pd
@@ -57,13 +60,13 @@ def train_model(config, vocab, model):
 
         train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, train_loader)
 
-        model.decoder.save("gpt_pretrain_final.pth")
+        model.decoder.save(epoch, "gpt_pretrain_final.pth")
 
 
 def main():
     config = cfg.Config.load("gpt_config.json")
 
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("data/snli_data.pkl")
+    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("../data/snli_data.pkl")
 
     # cuda or cpu
     config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
@@ -72,7 +75,7 @@ def main():
     config.n_dec_vocab = len(vocab)
     config.i_pad = vocab["<pad>"]
     config.n_batch = 64
-    config.n_epoch = 2
+    config.n_epoch = 100
 
     model = gpt_model.GPTPretrain(config)
     if os.path.isfile("gpt_pretrain_final.pth"):
