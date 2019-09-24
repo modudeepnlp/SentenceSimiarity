@@ -44,13 +44,13 @@ def train_model():
     vocab = data.load_data("../data/snli_data.pkl")[0]
     token_ids = txl_data.load_pretrain("large")
 
-    config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.i_pad = vocab["<pad>"]
     config.n_batch = 64
-    config.n_epoch = 10
+    config.n_epoch = 100
 
     offset = 0
     model = txl_model.TransformerXL(config)

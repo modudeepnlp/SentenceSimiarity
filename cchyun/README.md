@@ -136,6 +136,9 @@ gelu:
 0.0  : epoch: 14, loss: 0.406, dev: 78.958, test: 79.601
 0.5  : epoch: 24, loss: 0.404, dev: 81.731, test: 82.156
  
- # BERT
- No pretrain: epoch 48:, loss: 0.901, dev: 59.266, test: 59.986
-    pretrain: epoch: 10, loss, 0.453, dev: 82.615, test: 82.593
+# BERT
+No pretrain: epoch 48:, loss: 0.901, dev: 59.266, test: 59.986
+   pretrain: epoch: 10, loss, 0.453, dev: 82.615, test: 82.593
+
+# Transformer XL
+No pretrain: epoch: 48, loss: 0.732, dev: 71.256, test: 71.081

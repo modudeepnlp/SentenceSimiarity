@@ -12,49 +12,8 @@ import torch.nn.functional as F
 #      https://github.com/modudeepnlp/code_implementation/blob/master/codes/transformer/Transformer-Torch.py
 
 
-def get_attn_pad_mask(seq_q, seq_k, i_pad):
-    batch_size, len_q = seq_q.size()
-    batch_size, len_k = seq_k.size()
-    pad_attn_mask = seq_k.data.eq(i_pad).unsqueeze(1).expand(batch_size, len_q, len_k)  # <pad>
-    return pad_attn_mask.byte()
-
-
-def get_attn_subsequent_mask(seq):
-    subsequent_mask = torch.ones_like(seq).unsqueeze(-1).expand(seq.size(0), seq.size(1), seq.size(1))
-    subsequent_mask = subsequent_mask.triu(diagonal=1) # upper triangular part of a matrix(2-D)
-    return subsequent_mask.byte()
-
-
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
-
-
-class ScaledDotProductAttention(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.dropout = nn.Dropout(config.dropout)
-    
-    def forward(self, Q, K, V, r_w_bias, r_r_bias, attn_mask):
-        rw_Q = (Q.transpose(1, 2) + r_w_bias).transpose(1, 2)
-        # (Q + u) * K: (bs, n_head, qlen, klen)
-        AC = torch.matmul(rw_Q, K.transpose(-1, -2))
-
-        rr_Q = (Q.transpose(1, 2) + r_r_bias).transpose(1, 2)
-        # (Q + v) * K: (bs, n_head, qlen, klen)
-        BD = torch.matmul(rr_Q, K.transpose(-1, -2))
-
-        print(f">>>>>>>> {Q.size()}, {rr_Q.size()}, {BD.size()}")
-        # # (bs, n_head, qlen, klen)
-        # attn_score = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(self.config.d_head)
-        # attn_score.masked_fill_(attn_mask, -1e9)
-        # # (bs, n_head, qlen, klen)
-        # attn_prob = nn.Softmax(dim=-1)(attn_score)
-        # attn_prob = self.dropout(attn_prob)
-        # # (bs, n_head, qlen, d_head)
-        # context = torch.matmul(attn_prob, V)
-        # # (bs, n_head, qlen, d_head), (bs, n_head, qlen, klen)
-        # return context, attn_prob
 
 
 class MultiHeadAttention(nn.Module):
@@ -308,11 +267,12 @@ class SNLI(nn.Module):
         snli_logit = torch.tanh(snli_logit)
         snli_logit = self.dropout(snli_logit)
         
-        return lm_logit[:, :-1, :].contiguous(), snli_logit
+        return lm_logit[:, :-1, :].contiguous(), snli_logit, new_mems
     
-    def save(self, epoch, score_val, score_test, path):
+    def save(self, epoch, score_loss, score_val, score_test, path):
         torch.save({
             "epoch": epoch,
+            "score_loss": score_loss,
             "score_val": score_val,
             "score_test": score_test,
             "state_dict": self.state_dict()
@@ -321,4 +281,4 @@ class SNLI(nn.Module):
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
-        return save["epoch"], save["score_val"], save["score_test"]
+        return save["epoch"], save["score_loss"], save["score_val"], save["score_test"]

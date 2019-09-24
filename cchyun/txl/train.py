@@ -26,7 +26,7 @@ def eval_epoch(model, data_loader, mode):
             snli_label, sentences = value
             lm_label = sentences[:, 1:].contiguous()
 
-            lm_logit, snli_logit = model(sentences, *mems)
+            lm_logit, snli_logit, _ = model(sentences, *mems)
             _, indices = snli_logit.max(1)
 
             match = torch.eq(indices, snli_label).detach()
@@ -50,7 +50,7 @@ def train_epoch(epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data
 
             optimizer.zero_grad()
 
-            lm_logit, snli_logit = model(sentences, *mems)
+            lm_logit, snli_logit, _ = model(sentences, *mems)
 
             lm_loss = lm_loss_fn(lm_logit.view(-1, lm_logit.size(2)), lm_label.view(-1))
             snli_loss = snli_loss_fn(snli_logit, snli_label)
@@ -82,13 +82,13 @@ def train_model():
     config.i_pad = vocab["<pad>"]
 
     offset = 0
-    best_epoch, best_loss, best_val, best_test = None, None, None, None
+    best_epoch, best_loss, best_val, best_test = 0, 0, 0, 0
     model = txl_model.SNLI(config)
     if os.path.isfile("save_final.pth"):
-        model.load("save_final.pth")
+        best_epoch, best_loss, best_val, best_test = model.load("save_final.pth")
         print(">>>> load state dict from: ", "save_final.pth")
     elif os.path.isfile("save_pretrain_final.pth"):
-        offset, best_val, best_test = model.decoder.load("save_pretrain_final.pth")
+        model.decoder.load("save_pretrain_final.pth")
         print(">>>> load state dict from: ", "save_pretrain_final.pth", "epoch:", epoch)
     model.to(config.device)
 
@@ -105,14 +105,13 @@ def train_model():
         torch.optim.Adam(filter(lambda x: x.requires_grad, model.parameters()), betas=(0.9, 0.98), eps=1e-09),
         config.d_embed, 4000)
     
-    for step in trange(config.n_epoch, desc="Epoch"):
-        epoch = step + offset
+    for epoch in trange(config.n_epoch, desc="Epoch"):
         score_loss = train_epoch(epoch, model, config.lm_coef, lm_loss_fn, snli_loss_fn, optimizer, train_loader)
         score_val = eval_epoch(model, valid_loader, "Valid")
         score_test = eval_epoch(model, test_loader, "Test")
 
         if best_test is None or best_test < score_test:
-            model.save(epoch, score_val, score_test, "save_final.pth")
+            model.save(epoch, score_loss, score_val, score_test, "save_final.pth")
             best_epoch, best_loss, best_val, best_test = epoch, score_loss, score_val, score_test
             print(f">>>>>>> model saved at save_final.pth {best_epoch} {best_loss:.3f} {best_val:.3f} {best_test:.3f}")
         else:
