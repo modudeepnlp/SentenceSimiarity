@@ -10,9 +10,9 @@ import torch.utils.data
 import torch.nn.functional as F
 
 import config as cfg
-import data
+import global_data
 import optimizer as optim
-import txl_data
+import data
 import model as txl_model
 
 
@@ -73,29 +73,29 @@ def train_epoch(epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data
 def train_model():
     config = cfg.Config.load("config.json")
 
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("../data/snli_data.pkl")
+    vocab = global_data.load_vocab("../data/m_book.model")
+    train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = global_data.load_snli("../data/snli_data.pkl")
 
     config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.i_pad = vocab["<pad>"]
+    config.i_pad = global_data.PAD_ID
 
-    offset = 0
     best_epoch, best_loss, best_val, best_test = 0, 0, 0, 0
     model = txl_model.SNLI(config)
     if os.path.isfile("save_final.pth"):
         best_epoch, best_loss, best_val, best_test = model.load("save_final.pth")
         print(">>>> load state dict from: ", "save_final.pth")
     elif os.path.isfile("save_pretrain_final.pth"):
-        model.decoder.load("save_pretrain_final.pth")
-        print(">>>> load state dict from: ", "save_pretrain_final.pth", "epoch:", epoch)
+        offset = model.decoder.load("save_pretrain_final.pth")
+        print(">>>> load state dict from: ", "save_pretrain_final.pth", "epoch:", offset)
     model.to(config.device)
 
-    train_loader = txl_data.build_data_loader(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
-    # train_loader = txl_data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
-    valid_loader = txl_data.build_data_loader(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
-    test_loader = txl_data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
+    train_loader = data.build_data_loader(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
+    # train_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
+    valid_loader = data.build_data_loader(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
+    test_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
 
     print(config)
 

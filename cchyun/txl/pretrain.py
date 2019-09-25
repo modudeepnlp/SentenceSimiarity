@@ -10,9 +10,9 @@ import torch.utils.data
 import torch.nn.functional as F
 
 import config as cfg
-import data
+import global_data
 import optimizer as optim
-import txl_data
+import data
 import model as txl_model
 
 
@@ -41,25 +41,25 @@ def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
 def train_model():
     config = cfg.Config.load("config.json")
 
-    vocab = data.load_data("../data/snli_data.pkl")[0]
-    token_ids = txl_data.load_pretrain("large")
+    vocab = global_data.load_vocab("../data/m_book.model")
+    token_ids = data.load_pretrain("large")
 
-    config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.i_pad = vocab["<pad>"]
+    config.i_pad = global_data.PAD_ID
     config.n_batch = 64
     config.n_epoch = 100
 
     offset = 0
-    model = txl_model.TransformerXL(config)
+    model = txl_model.TXLPretrain(config)
     if os.path.isfile("save_pretrain_final.pth"):
         offset = model.decoder.load("save_pretrain_final.pth") + 1
         print(">>>> load state dict from: ", "save_pretrain_final.pth")
     model.to(config.device)
 
-    train_iter = txl_data.TXLIterator(config, token_ids)
+    train_iter = data.TXLIterator(config, token_ids)
 
     print(config)
 

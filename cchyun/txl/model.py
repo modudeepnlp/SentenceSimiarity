@@ -223,7 +223,7 @@ class Decoder(nn.Module):
         return save["epoch"]
 
 
-class TransformerXL(nn.Module):
+class TXLPretrain(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -261,7 +261,9 @@ class SNLI(nn.Module):
         
         lm_logit = self.projection_lm(sentence_ctx)
 
-        snli_logit = sentence_ctx[:, -1]
+        # snli_logit = sentence_ctx[:, -1]
+        # snli_logit = torch.mean(sentence_ctx, dim=1)
+        snli_logit = torch.max(sentence_ctx, dim=1)[0]
         snli_logit = self.dropout(snli_logit)
         snli_logit = self.projection_snli(snli_logit)
         snli_logit = torch.tanh(snli_logit)
