@@ -14,10 +14,10 @@ import torch.utils.data
 import torch.nn.functional as F
 
 import config as cfg
-import data
+import global_data
 import optimizer as optim
-import gpt_data
-import gpt_model
+import data
+import model as gpt_model
 
 
 def eval_epoch(model, data_loader, mode):
@@ -26,10 +26,10 @@ def eval_epoch(model, data_loader, mode):
 
     with tqdm(total=len(data_loader), desc=f"{mode}") as pbar:
         for i, value in enumerate(data_loader):
-            uids, snli_label, sentences, segments = value
+            snli_label, sentences = value
             lm_label = sentences[:, 1:].contiguous()
 
-            lm_logit, snli_logit = model(sentences, segments)
+            lm_logit, snli_logit = model(sentences)
             _, indices = snli_logit.max(1)
 
             match = torch.eq(indices, snli_label).detach()
@@ -47,12 +47,12 @@ def train_epoch(epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data
 
     with tqdm(total=len(data_loader), desc=f"Train {epoch}") as pbar:
         for i, value in enumerate(data_loader):
-            uids, snli_label, sentences, segments = value
+            snli_label, sentences = value
             lm_label = sentences[:, 1:].contiguous()
 
             optimizer.zero_grad()
 
-            lm_logit, snli_logit = model(sentences, segments)
+            lm_logit, snli_logit = model(sentences)
 
             lm_loss = lm_loss_fn(lm_logit.view(-1, lm_logit.size(2)), lm_label.view(-1))
             snli_loss = snli_loss_fn(snli_logit, snli_label)
@@ -96,30 +96,31 @@ def train_model(config, vocab, model, train_loader, valid_loader, test_loader):
 
 
 def main():
-    config = cfg.Config.load("gpt_config.json")
+    config = cfg.Config.load("config.json")
 
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("../data/snli_data.pkl")
+    vocab = global_data.load_vocab("../data/m_book.model")
+    train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = global_data.load_snli("../data/snli_data.pkl")
 
     # cuda or cpu
     config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.i_pad = vocab["<pad>"]
+    config.i_pad = global_data.PAD_ID
     
     model = gpt_model.SNLI(config)
-    if os.path.isfile("gpt_final.pth"):
-        model.load("gpt_final.pth")
-        print(">>>> load state dict from: ", "gpt_final.pth")
-    elif os.path.isfile("gpt_pretrain_final.pth"):
-        epoch = model.decoder.load("gpt_pretrain_final.pth")
-        print(">>>> load state dict from: ", "gpt_pretrain_final.pth", "epoch:", epoch)
+    if os.path.isfile("save_final.pth"):
+        model.load("save_final.pth")
+        print(">>>> load state dict from: ", "save_final.pth")
+    elif os.path.isfile("save_pretrain_final.pth"):
+        epoch = model.decoder.load("save_pretrain_final.pth")
+        print(">>>> load state dict from: ", "save_pretrain_final.pth", "epoch:", epoch)
     model.to(config.device)
 
-    train_loader = gpt_data.build_data_loader(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
-    # train_loader = gpt_data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
-    valid_loader = gpt_data.build_data_loader(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
-    test_loader = gpt_data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
+    train_loader = data.build_data_loader(train_label, train_sentence1, train_sentence2, config.device, config.n_batch)
+    # train_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch) ## only for fast test
+    valid_loader = data.build_data_loader(valid_label, valid_sentence1, valid_sentence2, config.device, config.n_batch)
+    test_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.device, config.n_batch)
 
     print(config)
     train_model(config, vocab, model, train_loader, valid_loader, test_loader)
