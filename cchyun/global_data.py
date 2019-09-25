@@ -100,7 +100,8 @@ def load_snli(file):
 
 if __name__ == "__main__":
     # make_corpus("data/corpus.small.txt", 100)
-    # make_corpus("data/corpus.large.txt", 1000)
+    # make_corpus("data/corpus.large.txt", 5000)
     # build_vocab("data/corpus.all.txt", "m_book", 40000)
-    dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/snli_data.pkl")
+    # dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/snli_data.pkl")
+    pass
 
