@@ -1,45 +1,35 @@
 import sys
 sys.path.append("..")
 
-import pickle, os, random, collections
-import numpy as np
-import pandas as pd
+import os
 from tqdm import tqdm, trange
-from datetime import datetime
-from pathlib import Path
-import logging
-
-import config as cfg
-import data
-import gpt_data
-import gpt_model
-import optimizer as optim
+import numpy as np
 
 import torch
 import torch.utils.data
 import torch.nn.functional as F
 
+import config as cfg
+import global_data
+import optimizer as optim
+import data
+import model as gpt_model
 
-def train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, data_loader):
-    losses = collections.deque(maxlen=len(data_loader))
+
+def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
+    losses = []
     model.train()
 
-    with tqdm(total=len(data_loader), desc=f"Train {epoch}") as pbar:
-        for i, value in enumerate(data_loader):
-            value = tuple(t.to(config.device) for t in value)
-            input_ids, segment_ids, lm_label_ids, is_next = value
-            lm_label = lm_label_ids[:, 1:].contiguous()
-
+    with tqdm(total=len(train_iter), desc=f"Train {epoch}") as pbar:
+        for i, (inputs, labels, seq_len) in enumerate(train_iter):
             optimizer.zero_grad()
 
-            lm_logit, snli_logit = model(input_ids, segment_ids)
+            logit = model(inputs)
 
-            lm_loss = lm_loss_fn(lm_logit.view(-1, lm_logit.size(2)), lm_label.view(-1))
-            ns_loss = ns_loss_fn(snli_logit.view(-1, 2), is_next.view(-1))
-            loss = lm_loss + ns_loss
+            loss = loss_fn(logit.view(-1, logit.size(2)), labels.view(-1))
             loss_val = loss.item()
             losses.append(loss_val)
-            
+
             loss.backward()
             optimizer.step_and_update_lr()
 
@@ -47,46 +37,41 @@ def train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, data_lo
             pbar.set_postfix_str(f"Loss: {loss_val:.3f} ({np.mean(losses):.3f})")
 
 
-def train_model(config, vocab, model):
-    lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
-    ns_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
-    optimizer = optim.ScheduledOptim(
-        torch.optim.Adam(filter(lambda x: x.requires_grad, model.parameters()), betas=(0.9, 0.98), eps=1e-09),
-        # torch.optim.SGD(filter(lambda x: x.requires_grad, model.parameters()), lr=0.0001),
-        config.d_embed, 4000)
+def train_model():
+    config = cfg.Config.load("config.json")
 
-    for epoch in trange(config.n_epoch, desc="Epoch"):
-        train_loader = gpt_data.build_pretrain_loader(epoch, vocab, config.n_batch)
+    vocab = global_data.load_vocab("../data/m_book.model")
+    token_ids = data.load_pretrain("large")
 
-        train_epoch(config, epoch, model, lm_loss_fn, ns_loss_fn, optimizer, train_loader)
-
-        model.decoder.save(epoch, "gpt_pretrain_final.pth")
-
-
-def main():
-    config = cfg.Config.load("gpt_config.json")
-
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("../data/snli_data.pkl")
-
-    # cuda or cpu
     config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
-    config.i_pad = vocab["<pad>"]
+    config.i_pad = global_data.PAD_ID
     config.n_batch = 64
     config.n_epoch = 100
 
+    offset = 0
     model = gpt_model.GPTPretrain(config)
-    if os.path.isfile("gpt_pretrain_final.pth"):
-        model.decoder.load("gpt_pretrain_final.pth")
-        print(">>>> load state dict from: ", "gpt_pretrain_final.pth")
+    if os.path.isfile("save_pretrain_final.pth"):
+        offset = model.decoder.load("save_pretrain_final.pth") + 1
+        print(">>>> load state dict from: ", "save_pretrain_final.pth")
     model.to(config.device)
 
+    train_iter = data.GPTIterator(config, token_ids)
+
     print(config)
-    train_model(config, vocab, model)
+
+    loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
+    optimizer = optim.ScheduledOptim(
+        torch.optim.Adam(filter(lambda x: x.requires_grad, model.parameters()), betas=(0.9, 0.98), eps=1e-09),
+        config.d_embed, 4000)
+    
+    for step in trange(config.n_epoch, desc="Epoch"):
+        epoch = step + offset
+        train_epoch(config, epoch, model, loss_fn, optimizer, train_iter)
+        model.decoder.save(epoch, "save_pretrain_final.pth")
 
 
-if __name__ == "__main__":
-    main()
-
+if __name__ == '__main__':
+    train_model()

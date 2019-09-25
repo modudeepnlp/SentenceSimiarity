@@ -249,15 +249,9 @@ class GPTPretrain(nn.Module):
         # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
         sentence_ctx, _ = self.decoder(sentences)
         
-        lm_logit = self.projection_lm(sentence_ctx)
-
-        ns_logit = sentence_ctx[:, -1]
-        ns_logit = self.dropout(ns_logit)
-        ns_logit = self.projection_ns(ns_logit)
-        ns_logit = torch.tanh(ns_logit)
-        ns_logit = self.dropout(ns_logit)
+        logit = self.projection_lm(sentence_ctx)
         
-        return lm_logit[:, :-1, :].contiguous(), ns_logit
+        return logit
 
 
 class SNLI(nn.Module):

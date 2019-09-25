@@ -88,9 +88,9 @@ def train_model(config, vocab, model, train_loader, valid_loader, test_loader):
         score_test = eval_epoch(model, test_loader, "Test")
 
         if best_test is None or best_test < score_test:
-            model.save(epoch, score_val, score_test, "gpt_final.pth")
+            model.save(epoch, score_val, score_test, "save_final.pth")
             best_epoch, best_loss, best_val, best_test = epoch, score_loss, score_val, score_test
-            print(f">>>>>>> model saved at gpt_final.pth {best_epoch} {best_loss:.3f} {best_val:.3f} {best_test:.3f}")
+            print(f">>>>>>> model saved at save_final.pth {best_epoch} {best_loss:.3f} {best_val:.3f} {best_test:.3f}")
         else:
             print(f">>>>>>> model not seved under accuracy {best_epoch} {best_loss:.3f} {best_val:.3f} {best_test:.3f}")
 
