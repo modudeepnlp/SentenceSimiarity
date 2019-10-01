@@ -66,7 +66,7 @@ def build_vocab(input, prefix, vocab_size):
         " --unk_id=1 --unk_piece=[UNK]" +
         " --bos_id=2 --bos_piece=[BOS]" +
         " --eos_id=3 --eos_piece=[EOS]" +
-        " --user_defined_symbols=<sep>,<cls>,<msk>" )
+        " --user_defined_symbols=[SEP],[CLS],[MASK]" )
 
 
 """
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     # make_book_corpus("data/corpus.book.small.txt", 100)
     # make_book_corpus("data/corpus.book.large.txt", 4000)
     # make_snli_corpus(["data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt"], "data/corpus.snli.txt")
-    # build_vocab("data/corpus.snli.txt", "m_snli_8000", 8000)
+    # build_vocab("data/corpus.snli.txt", "m_snli_16000", 16000)
     # dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/m_snli_16000.model", "data/snli_16000_data.pkl")
     pass
 
