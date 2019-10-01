@@ -16,7 +16,7 @@ import data
 import model as txl_model
 
 
-def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
+def train_epoch(config, epoch, model, loss_fn, optimizer, scheduler, train_iter):
     losses = []
     model.train()
 
@@ -33,7 +33,8 @@ def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
             losses.append(loss_val)
 
             loss.backward()
-            optimizer.step_and_update_lr()
+            optimizer.step()
+            scheduler.step()
 
             pbar.update(1)
             pbar.set_postfix_str(f"Loss: {loss_val:.3f} ({np.mean(losses):.3f})")
@@ -65,13 +66,19 @@ def train_model():
     print(config)
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
-    optimizer = optim.ScheduledOptim(
-        optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
-        config.d_embed, 4000)
+    
+    t_total = len(train_iter) * config.n_epoch
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': config.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+    optimizer = optim.AdamW(optimizer_grouped_parameters, lr=config.learning_rate, eps=config.adam_epsilon)
+    scheduler = optim.WarmupLinearSchedule(optimizer, warmup_steps=config.warmup_steps, t_total=t_total)
     
     for step in trange(config.n_epoch, desc="Epoch"):
         epoch = step + offset
-        train_epoch(config, epoch, model, loss_fn, optimizer, train_iter)
+        train_epoch(config, epoch, model, loss_fn, optimizer, scheduler, train_iter)
         model.decoder.save(epoch, save_pretrain_file)
 
 

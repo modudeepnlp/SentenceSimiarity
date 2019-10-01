@@ -38,7 +38,7 @@ def eval_epoch(config, epoch, model, data_loader, mode):
     return np.sum(matchs) * 100 / len(matchs) if 0 < len(matchs) else 0
 
 
-def train_epoch(config, epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, data_loader):
+def train_epoch(config, epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, scheduler, data_loader):
     losses = collections.deque(maxlen=len(data_loader))
     model.train()
 
@@ -63,8 +63,8 @@ def train_epoch(config, epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimiz
             losses.append(loss_val)
 
             loss.backward()
-            # optimizer.step()
-            optimizer.step_and_update_lr()
+            optimizer.step()
+            scheduler.step()
 
             pbar.update(1)
             pbar.set_postfix_str(f"Loss: {loss_val:.3f} ({np.mean(losses):.3f})")
@@ -103,16 +103,19 @@ def train_model():
 
     lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=config.i_pad, reduction='mean')
     snli_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
-    optimizer = optim.ScheduledOptim(
-        # optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
-        # optim.AdamW(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
-        # torch.optim.Adam(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
-        torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
-        config.d_embed, 4000)
+    
+    t_total = len(train_loader) * config.n_epoch
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': config.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+    optimizer = optim.AdamW(optimizer_grouped_parameters, lr=config.learning_rate, eps=config.adam_epsilon)
+    scheduler = optim.WarmupLinearSchedule(optimizer, warmup_steps=config.warmup_steps, t_total=t_total)
     
     best_epoch, best_loss, best_val, best_test = None, None, None, None
     for epoch in trange(config.n_epoch, desc="Epoch"):
-        score_loss = train_epoch(config, epoch, model, config.lm_coef, lm_loss_fn, snli_loss_fn, optimizer, train_loader)
+        score_loss = train_epoch(config, epoch, model, config.lm_coef, lm_loss_fn, snli_loss_fn, optimizer, scheduler, train_loader)
         score_val = eval_epoch(config, epoch, model, valid_loader, "Valid")
         score_test = eval_epoch(config, epoch, model, test_loader, "Test")
 

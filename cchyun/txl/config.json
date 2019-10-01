@@ -14,7 +14,10 @@
     "layer_norm_epsilon": 1e-12,
     "lm_coef": 0.5,
     "n_output": 3,
+    "weight_decay": 0,
     "learning_rate": 5e-5,
+    "adam_epsilon": 1e-8,
+    "warmup_steps": 0,
     "n_batch": 128,
     "n_epoch": 50
 }
