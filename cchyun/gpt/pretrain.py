@@ -66,7 +66,10 @@ def train_model():
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
     optimizer = optim.ScheduledOptim(
-        optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        # optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        # optim.AdamW(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
+        # torch.optim.Adam(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
         config.d_embed, 4000)
     
     for step in trange(config.n_epoch, desc="Epoch"):

@@ -102,7 +102,10 @@ def train_model():
     lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=config.i_pad, reduction='mean')
     snli_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
     optimizer = optim.ScheduledOptim(
-        optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        # optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        # optim.AdamW(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
+        # torch.optim.Adam(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
+        torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-09),
         config.d_embed, 4000)
     
     best_epoch, best_loss, best_val, best_test = None, None, None, None
