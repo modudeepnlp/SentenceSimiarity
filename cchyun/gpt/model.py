@@ -285,9 +285,10 @@ class SNLI(nn.Module):
         
         return lm_logit[:, :-1, :].contiguous(), snli_logit
     
-    def save(self, epoch, score_val, score_test, path):
+    def save(self, epoch, score_loss, score_val, score_test, path):
         torch.save({
             "epoch": epoch,
+            "score_loss": score_loss,
             "score_val": score_val,
             "score_test": score_test,
             "state_dict": self.state_dict()
@@ -296,5 +297,4 @@ class SNLI(nn.Module):
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
-        return save["epoch"], save["score_val"], save["score_test"]
-
+        return save["epoch"], save["score_loss"], save["score_val"], save["score_test"]
