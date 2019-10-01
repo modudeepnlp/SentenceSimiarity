@@ -91,10 +91,8 @@ class WarmupCosineWithHardRestartsSchedule(LambdaLR):
         return max(0.0, 0.5 * (1. + math.cos(math.pi * ((float(self.cycles) * progress) % 1.0))))
 
 
-
 class AdamW(Optimizer):
     """ Implements Adam algorithm with weight decay fix.
-
     Parameters:
         lr (float): learning rate. Default 1e-3.
         betas (tuple of 2 floats): Adams beta parameters (b1, b2). Default: (0.9, 0.999)
@@ -117,7 +115,6 @@ class AdamW(Optimizer):
 
     def step(self, closure=None):
         """Performs a single optimization step.
-
         Arguments:
             closure (callable, optional): A closure that reevaluates the model
                 and returns the loss.

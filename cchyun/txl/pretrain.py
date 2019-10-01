@@ -22,7 +22,8 @@ def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
 
     mems = tuple()
     with tqdm(total=len(train_iter), desc=f"Train {epoch}") as pbar:
-        for i, (inputs, labels, seq_len) in enumerate(train_iter):
+        for i, value in enumerate(train_iter):
+            inputs, labels = map(lambda v: v.to(config.device), value)
             optimizer.zero_grad()
 
             logit, mems = model(inputs, *mems)
@@ -41,22 +42,22 @@ def train_epoch(config, epoch, model, loss_fn, optimizer, train_iter):
 def train_model():
     config = cfg.Config.load("config.json")
 
-    vocab = global_data.load_vocab("../data/m_book.model")
-    token_ids = data.load_pretrain("large")
+    vocab = global_data.load_vocab(vocab_file)
+    token_ids = data.load_pretrain(data_pkl)
 
-    config.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.i_pad = global_data.PAD_ID
     config.n_batch = 64
-    config.n_epoch = 100
+    config.n_epoch = 3
 
     offset = 0
     model = txl_model.TXLPretrain(config)
-    if os.path.isfile("save_pretrain_final.pth"):
-        offset = model.decoder.load("save_pretrain_final.pth") + 1
-        print(">>>> load state dict from: ", "save_pretrain_final.pth")
+    if os.path.isfile(save_pretrain_file):
+        offset = model.decoder.load(save_pretrain_file) + 1
+        print(">>>> load state dict from: ", save_pretrain_file)
     model.to(config.device)
 
     train_iter = data.TXLIterator(config, token_ids)
@@ -65,13 +66,19 @@ def train_model():
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
     optimizer = optim.ScheduledOptim(
-        torch.optim.Adam(filter(lambda x: x.requires_grad, model.parameters()), betas=(0.9, 0.98), eps=1e-09),
+        optim.AdamW(model.parameters(), lr=config.learning_rate, betas=(0.9, 0.98), eps=1e-09),
         config.d_embed, 4000)
     
     for step in trange(config.n_epoch, desc="Epoch"):
         epoch = step + offset
         train_epoch(config, epoch, model, loss_fn, optimizer, train_iter)
-        model.decoder.save(epoch, "save_pretrain_final.pth")
+        model.decoder.save(epoch, save_pretrain_file)
+
+
+prefix = 8000
+vocab_file = f"../data/m_snli_{prefix}.model"
+data_pkl = f"../data/pretrain_gpt_{prefix}_0.pkl"
+save_pretrain_file = f"save_pretrain_{prefix}.pth"
 
 
 if __name__ == '__main__':

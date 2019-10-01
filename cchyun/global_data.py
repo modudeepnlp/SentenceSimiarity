@@ -24,7 +24,7 @@ label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
 """
 학습 corpus 생성
 """
-def make_corpus(output, count=None):
+def make_book_corpus(output, count=None):
     filenames = os.listdir("/home/ubuntu/Dev/Research/Dnn/bookcorpus/out_txts")
     with open(output, "w") as corpus:
         for filename in filenames:
@@ -38,13 +38,30 @@ def make_corpus(output, count=None):
 
 
 """
+학습 corpus 생성
+"""
+def make_snli_corpus(srcs, dst):
+    datasets = []
+    for src in srcs:
+        datasets.append(pd.read_csv(src, sep="\t"))
+    with open(dst, "w") as corpus:
+        for dataset in datasets:
+            for i, row in dataset.iterrows():
+                corpus.write(row["sentence1"].lower())
+                corpus.write("\n")
+                corpus.write(row["sentence1"].lower())
+                corpus.write("\n")
+
+
+"""
 vocab 생성
 """
 def build_vocab(input, prefix, vocab_size):
     spm.SentencePieceTrainer.train(
-        f"--input={input} --model_prefix={prefix} --vocab_size={vocab_size}" + 
-        " --max_sentence_length=10000"
-        " --input_sentence_size=12000000 --shuffle_input_sentence=true"
+        f"--input={input} --model_prefix={prefix} --vocab_size={vocab_size + 7}" + 
+        " --model_type=bpe" +
+        # " --max_sentence_length=10000" +
+        # " --input_sentence_size=12000000 --shuffle_input_sentence=true" +
         " --pad_id=0 --pad_piece=[PAD]" +
         " --unk_id=1 --unk_piece=[UNK]" +
         " --bos_id=2 --bos_piece=[BOS]" +
@@ -81,8 +98,8 @@ def read_snli(vocab, file):
     return gold_label, sentence1, sentence2
 
 
-def dump_snli(train, valid, test, save):
-    vocab = load_vocab()
+def dump_snli(train, valid, test, voc, save):
+    vocab = load_vocab(voc)
 
     train_label, train_sentence1, train_sentence2 = read_snli(vocab, train)
     valid_label, valid_sentence1, valid_sentence2 = read_snli(vocab, valid)
@@ -99,9 +116,10 @@ def load_snli(file):
 
 
 if __name__ == "__main__":
-    # make_corpus("data/corpus.small.txt", 100)
-    # make_corpus("data/corpus.large.txt", 5000)
-    # build_vocab("data/corpus.all.txt", "m_book", 40000)
-    # dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/snli_data.pkl")
+    # make_book_corpus("data/corpus.book.small.txt", 100)
+    # make_book_corpus("data/corpus.book.large.txt", 4000)
+    # make_snli_corpus(["data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt"], "data/corpus.snli.txt")
+    # build_vocab("data/corpus.snli.txt", "m_snli_8000", 8000)
+    # dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/m_snli_16000.model", "data/snli_16000_data.pkl")
     pass
 
