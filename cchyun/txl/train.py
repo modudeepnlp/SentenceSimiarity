@@ -1,7 +1,7 @@
 import sys
 sys.path.append("..")
 
-import os, collections
+import os, argparse
 from tqdm import tqdm, trange
 import numpy as np
 
@@ -39,7 +39,7 @@ def eval_epoch(config, epoch, model, data_loader, mode):
 
 
 def train_epoch(config, epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimizer, scheduler, data_loader):
-    losses = collections.deque(maxlen=len(data_loader))
+    losses = []
     model.train()
 
     mems = tuple()
@@ -71,18 +71,19 @@ def train_epoch(config, epoch, model, lm_coef, lm_loss_fn, snli_loss_fn, optimiz
     return np.mean(losses)
 
 
-def train_model():
+def train_model(cuda, vocab_file, data_pkl, save_file, save_pretrain_file):
     config = cfg.Config.load("config.json")
 
     vocab = global_data.load_vocab(vocab_file)
     train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2 = global_data.load_snli(data_pkl)
 
     # cuda or cpu
-    config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device(cuda if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.i_pad = global_data.PAD_ID
+    print(config)
 
     best_epoch, best_loss, best_val, best_test = 0, 0, 0, 0
     model = txl_model.SNLI(config)
@@ -98,8 +99,6 @@ def train_model():
     # train_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.n_batch) ## only for fast test
     valid_loader = data.build_data_loader(valid_label, valid_sentence1, valid_sentence2, config.n_batch)
     test_loader = data.build_data_loader(test_label, test_sentence1, test_sentence2, config.n_batch)
-
-    print(config)
 
     lm_loss_fn = torch.nn.CrossEntropyLoss(ignore_index=config.i_pad, reduction='mean')
     snli_loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
@@ -127,12 +126,17 @@ def train_model():
             print(f">>>>>>> model not seved under accuracy {best_epoch} {best_loss:.3f} {best_val:.3f} {best_test:.3f}")
 
 
-prefix = 16000
-vocab_file = f"../data/m_snli_{prefix}.model"
-data_pkl = f"../data/snli_{prefix}_data.pkl"
-save_file = f"save_{prefix}.pth"
-save_pretrain_file = f"save_pretrain_{prefix}.pth"
-
-
 if __name__ == '__main__':
-    train_model()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cuda", default="cuda", type=str, required=False,
+                        help="cuda device # cuda / cuda:0 / cuda:1")
+    parser.add_argument("--vocab", default="8000", type=str, required=False,
+                        help="vocab size # 8000 / 1600")
+    args = parser.parse_args()
+
+    vocab_file = f"../data/m_snli_{args.vocab}.model"
+    data_pkl = f"../data/snli_{args.vocab}_data.pkl"
+    save_file = f"save_{args.vocab}.pth"
+    save_pretrain_file = f"save_pretrain_{args.vocab}.pth"
+
+    train_model(args.cuda, vocab_file, data_pkl, save_file, save_pretrain_file)

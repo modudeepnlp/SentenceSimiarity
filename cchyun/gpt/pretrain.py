@@ -1,7 +1,7 @@
 import sys
 sys.path.append("..")
 
-import os
+import os, argparse
 from tqdm import tqdm, trange
 import numpy as np
 
@@ -40,19 +40,20 @@ def train_epoch(config, epoch, model, loss_fn, optimizer, scheduler, train_iter)
             pbar.set_postfix_str(f"Loss: {loss_val:.3f} ({np.mean(losses):.3f})")
 
 
-def train_model():
+def train_model(cuda, vocab_file, data_pkl, save_pretrain_file):
     config = cfg.Config.load("config.json")
 
     vocab = global_data.load_vocab(vocab_file)
     token_ids = data.load_pretrain(data_pkl)
 
-    config.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    config.device = torch.device(cuda if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
     config.n_enc_vocab = len(vocab)
     config.n_dec_vocab = len(vocab)
     config.i_pad = global_data.PAD_ID
     config.n_batch = 128
     config.n_epoch = 3
+    print(config)
 
     offset = 0
     model = gpt_model.GPTPretrain(config)
@@ -62,8 +63,6 @@ def train_model():
     model.to(config.device)
 
     train_iter = data.GPTIterator(config, token_ids)
-
-    print(config)
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
     
@@ -82,11 +81,16 @@ def train_model():
         model.decoder.save(epoch, save_pretrain_file)
 
 
-prefix = 16000
-vocab_file = f"../data/m_snli_{prefix}.model"
-data_pkl = f"../data/pretrain_gpt_{prefix}_0.pkl"
-save_pretrain_file = f"save_pretrain_{prefix}.pth"
-
-
 if __name__ == '__main__':
-    train_model()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cuda", default="cuda", type=str, required=False,
+                        help="cuda device # cuda / cuda:0 / cuda:1")
+    parser.add_argument("--vocab", default="8000", type=str, required=False,
+                        help="vocab size # 8000 / 1600")
+    args = parser.parse_args()
+
+    vocab_file = f"../data/m_snli_{args.vocab}.model"
+    data_pkl = f"../data/pretrain_gpt_{args.vocab}_0.pkl"
+    save_pretrain_file = f"save_pretrain_{args.vocab}.pth"
+
+    train_model(args.cuda, vocab_file, data_pkl, save_pretrain_file)
