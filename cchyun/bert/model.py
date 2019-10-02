@@ -34,17 +34,19 @@ class ScaledDotProductAttention(nn.Module):
         super().__init__()
         self.config = config
         self.dropout = nn.Dropout(config.dropout)
+
+        self.scale = 1 / (self.config.d_head ** 0.5)
     
     def forward(self, Q, K, V, attn_mask):
         # (bs, n_head, n_q_seq, n_k_seq)
-        scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(self.config.d_k)
+        scores = torch.matmul(Q, K.transpose(-1, -2)).mul_(self.scale)
         scores.masked_fill_(attn_mask, -1e9)
         # (bs, n_head, n_q_seq, n_k_seq)
         attn = nn.Softmax(dim=-1)(scores)
         attn = self.dropout(attn)
-        # (bs, n_head, n_q_seq, d_v)
+        # (bs, n_head, n_q_seq, d_head)
         context = torch.matmul(attn, V)
-        # (bs, n_head, n_q_seq, d_v), (bs, n_head, n_q_seq, n_v_seq)
+        # (bs, n_head, n_q_seq, d_head), (bs, n_head, n_q_seq, n_v_seq)
         return context, attn
 
 
@@ -53,31 +55,31 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.config = config
 
-        self.W_Q = nn.Linear(self.config.d_embed, self.config.d_k * self.config.n_heads)
-        self.W_K = nn.Linear(self.config.d_embed, self.config.d_k * self.config.n_heads)
-        self.W_V = nn.Linear(self.config.d_embed, self.config.d_k * self.config.n_heads)
+        self.W_Q = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
+        self.W_K = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
+        self.W_V = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
         self.scaled_dot_attn = ScaledDotProductAttention(self.config)
-        self.linear = nn.Linear(self.config.n_heads * self.config.d_v, self.config.d_embed)
+        self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_embed)
 
         self.dropout = nn.Dropout(config.dropout)
     
     def forward(self, Q, K, V, attn_mask):
         batch_size = Q.size(0)
 
-        # (bs, n_head, n_q_seq, d_k)
-        q_s = self.W_Q(Q).view(batch_size, -1, self.config.n_heads, self.config.d_k).transpose(1,2)
-        # (bs, n_head, n_k_seq, d_k)
-        k_s = self.W_K(K).view(batch_size, -1, self.config.n_heads, self.config.d_k).transpose(1,2)
-        # (bs, n_head, n_v_seq, d_v)
-        v_s = self.W_V(V).view(batch_size, -1, self.config.n_heads, self.config.d_v).transpose(1,2)
+        # (bs, n_head, n_q_seq, d_head)
+        q_s = self.W_Q(Q).view(batch_size, -1, self.config.n_head, self.config.d_head).transpose(1,2)
+        # (bs, n_head, n_k_seq, d_head)
+        k_s = self.W_K(K).view(batch_size, -1, self.config.n_head, self.config.d_head).transpose(1,2)
+        # (bs, n_head, n_v_seq, d_head)
+        v_s = self.W_V(V).view(batch_size, -1, self.config.n_head, self.config.d_head).transpose(1,2)
 
         # (bs, n_head, n_q_seq, n_k_seq)
-        attn_mask = attn_mask.unsqueeze(1).repeat(1, self.config.n_heads, 1, 1)
+        attn_mask = attn_mask.unsqueeze(1).repeat(1, self.config.n_head, 1, 1)
 
-        # (bs, n_head, n_q_seq, d_v), (bs, n_head, n_q_seq, n_k_seq)
+        # (bs, n_head, n_q_seq, d_head), (bs, n_head, n_q_seq, n_k_seq)
         context, attn = self.scaled_dot_attn(q_s, k_s, v_s, attn_mask)
-        # (bs, n_head, n_q_seq, h_head * d_v)
-        context = context.transpose(1, 2).contiguous().view(batch_size, -1, self.config.n_heads * self.config.d_v)
+        # (bs, n_head, n_q_seq, h_head * d_head)
+        context = context.transpose(1, 2).contiguous().view(batch_size, -1, self.config.n_head * self.config.d_head)
         # (bs, n_head, n_q_seq, e_embd)
         output = self.linear(context)
         output = self.dropout(output)
@@ -309,14 +311,16 @@ class BertModel(nn.Module):
 
         return enc_outputs, pooled_output, enc_self_attns
     
-    def save(self, path):
+    def save(self, epoch, path):
         torch.save({
+            "epoch": epoch,
             "state_dict": self.state_dict()
         }, path)
     
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
+        return save["epoch"]
 
 
 class BertPretrain(nn.Module):
@@ -349,8 +353,12 @@ class SNLI(nn.Module):
  
         return seq_relationship_score
     
-    def save(self, path):
+    def save(self, epoch, score_loss, score_val, score_test, path):
         torch.save({
+            "epoch": epoch,
+            "score_loss": score_loss,
+            "score_val": score_val,
+            "score_test": score_test,
             "state_dict": self.state_dict()
         }, path)
     

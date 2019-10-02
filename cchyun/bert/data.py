@@ -1,23 +1,86 @@
-from argparse import ArgumentParser
-from pathlib import Path
+import sys
+sys.path.append("..")
+
+import os
 from tqdm import tqdm, trange
-from tempfile import TemporaryDirectory
-import shelve
-from multiprocessing import Pool
-
-from random import random, randrange, randint, shuffle, choice
 import numpy as np
-import json
-import collections
-import logging
+import pickle
 
-import config as cfg
-import data
-import tokenizer
+import collections
+from tempfile import TemporaryDirectory
+from pathlib import Path
+import shelve
+from random import random, randrange, randint, shuffle, choice
+import json
+import logging
 
 import torch
 import torch.utils.data
+import torch.nn.functional as F
 
+import config as cfg
+import global_data
+
+
+"""
+train dataset
+"""
+class BERTDataSet(torch.utils.data.Dataset):
+    def __init__(self, labels, sentence1s, sentence2s):
+        self.labels = labels
+        self.sentence1s = sentence1s
+        self.sentence2s = sentence2s
+    
+    def __len__(self):
+        assert len(self.sentence1s) == len(self.sentence2s)
+        return len(self.sentence1s)
+    
+    def __getitem__(self, uid):
+        label = self.labels[uid]
+        sentence1 = self.sentence1s[uid]
+        sentence2 = self.sentence2s[uid]
+        sentence = []
+        sentence = []
+        sentence.append(global_data.CLS_ID)
+        sentence.extend(sentence1)
+        sentence.append(global_data.SEP_ID)
+        sentence.extend(sentence2)
+        sentence.append(global_data.SEP_ID)
+        segment = []
+        segment.extend([0] * (len(sentence1) + 2))
+        segment.extend([1] * (len(sentence2) + 1))
+        return torch.tensor(label), torch.tensor(sentence), torch.tensor(segment)
+
+
+"""
+data loader 생성
+"""
+def build_data_loader(label, sentence1s, sentence2s, batch_size):
+    dataset = BERTDataSet(label, sentence1s, sentence2s)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    return loader
+
+
+"""
+data preprocessing
+"""
+def collate_fn(inputs):
+    labels, sentences, segment = list(zip(*inputs))
+
+    sentences = torch.nn.utils.rnn.pad_sequence(sentences, batch_first=True, padding_value=global_data.PAD_ID)
+    segment = torch.nn.utils.rnn.pad_sequence(segment, batch_first=True, padding_value=global_data.PAD_ID)
+
+    batch = [
+        torch.stack(labels, dim=0),
+        sentences,
+        segment,
+    ]
+    return batch
+
+
+########################################################################
+# start of pregenerate_training_data.py
+########################################################################
 class DocumentDatabase:
     def __init__(self, reduce_memory=False):
         if reduce_memory:
@@ -109,12 +172,12 @@ def truncate_seq_pair(tokens_a, tokens_b, max_num_tokens):
 MaskedLmInstance = collections.namedtuple("MaskedLmInstance",
                                           ["index", "label"])
 
-def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab):
+def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list):
     """Creates the predictions for the masked LM objective. This is mostly copied from the Google BERT repo, but
     with several refactors to clean it up and remove a lot of unnecessary variables."""
     cand_indices = []
     for (i, token) in enumerate(tokens):
-        if token == "<cls>" or token == "<sep>":
+        if token == "[CLS]" or token == "[SEP]":
             continue
         # Whole Word Masking means that if we mask all of the wordpieces
         # corresponding to an original word. When a word has been split into
@@ -125,18 +188,16 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
         # Note that Whole Word Masking does *not* change the training code
         # at all -- we still predict each WordPiece independently, softmaxed
         # over the entire vocabulary.
-        if token in vocab:
-            if (whole_word_mask and len(cand_indices) >= 1 and token.startswith("##")):
-                cand_indices[-1].append(i)
-            else:
-                cand_indices.append([i])
+        if (whole_word_mask and len(cand_indices) >= 1 and not token.startswith(u"\u2581")):
+            cand_indices[-1].append(i)
+        else:
+            cand_indices.append([i])
 
     num_to_mask = min(max_predictions_per_seq,
                       max(1, int(round(len(tokens) * masked_lm_prob))))
     shuffle(cand_indices)
     masked_lms = []
     covered_indexes = set()
-    vocab_list = list(vocab.keys())
     for index_set in cand_indices:
         if len(masked_lms) >= num_to_mask:
             break
@@ -157,7 +218,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
             masked_token = None
             # 80% of the time, replace with [MASK]
             if random() < 0.8:
-                masked_token = "<msk>"
+                masked_token = "[MASK]"
             else:
                 # 10% of the time, keep original
                 if random() < 0.5:
@@ -178,13 +239,13 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
 
 def create_instances_from_document(
         doc_database, doc_idx, max_seq_length, short_seq_prob,
-        masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab):
+        masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list):
     """This code is mostly a duplicate of the equivalent function from Google BERT's repo.
     However, we make some changes and improvements. Sampling is improved and no longer requires a loop in this function.
     Also, documents are sampled proportionally to the number of sentences they contain, which means each sentence
     (rather than each document) has an equal chance of being sampled as a false example for the NextSentence task."""
     document = doc_database[doc_idx]
-    # Account for <cls>, <sep>, <sep>
+    # Account for [CLS], [SEP], [SEP]
     max_num_tokens = max_seq_length - 3
 
     # We *usually* want to fill up the entire sequence since we are padding
@@ -209,9 +270,6 @@ def create_instances_from_document(
     i = 0
     while i < len(document):
         segment = document[i]
-        if len(segment) == 0:
-            i += 1
-            continue
         current_chunk.append(segment)
         current_length += len(segment)
         if i == len(document) - 1 or current_length >= target_seq_length:
@@ -252,24 +310,25 @@ def create_instances_from_document(
                         tokens_b.extend(current_chunk[j])
                 truncate_seq_pair(tokens_a, tokens_b, max_num_tokens)
 
-                assert len(tokens_a) >= 1
-                assert len(tokens_b) >= 1
+                if 0 < len(tokens_a) and 0 < len(tokens_b):
+                    # assert len(tokens_a) >= 1
+                    # assert len(tokens_b) >= 1
 
-                tokens = ["<cls>"] + tokens_a + ["<sep>"] + tokens_b + ["<sep>"]
-                # The segment IDs are 0 for the <cls> token, the A tokens and the first <sep>
-                # They are 1 for the B tokens and the final <sep>
-                segment_ids = [0 for _ in range(len(tokens_a) + 2)] + [1 for _ in range(len(tokens_b) + 1)]
+                    tokens = ["[CLS]"] + tokens_a + ["[SEP]"] + tokens_b + ["[SEP]"]
+                    # The segment IDs are 0 for the [CLS] token, the A tokens and the first [SEP]
+                    # They are 1 for the B tokens and the final [SEP]
+                    segment_ids = [0 for _ in range(len(tokens_a) + 2)] + [1 for _ in range(len(tokens_b) + 1)]
 
-                tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
-                    tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab)
+                    tokens, masked_lm_positions, masked_lm_labels = create_masked_lm_predictions(
+                        tokens, masked_lm_prob, max_predictions_per_seq, whole_word_mask, vocab_list)
 
-                instance = {
-                    "tokens": tokens,
-                    "segment_ids": segment_ids,
-                    "is_random_next": is_random_next,
-                    "masked_lm_positions": masked_lm_positions,
-                    "masked_lm_labels": masked_lm_labels}
-                instances.append(instance)
+                    instance = {
+                        "tokens": tokens,
+                        "segment_ids": segment_ids,
+                        "is_random_next": is_random_next,
+                        "masked_lm_positions": masked_lm_positions,
+                        "masked_lm_labels": masked_lm_labels}
+                    instances.append(instance)
             current_chunk = []
             current_length = 0
         i += 1
@@ -277,86 +336,26 @@ def create_instances_from_document(
     return instances
 
 
-def create_training_file(docs, vocab, args, epoch_num):
-    epoch_filename = args.output_dir / "bert_epoch_{}_data.json".format(epoch_num)
+def create_training_file(docs, vocab_list, args):
+    epoch_filename = Path(f"{args.save_filename}_data.json")
     num_instances = 0
     with epoch_filename.open('w') as epoch_file:
         for doc_idx in trange(len(docs), desc="Document"):
             doc_instances = create_instances_from_document(
                 docs, doc_idx, max_seq_length=args.max_seq_len, short_seq_prob=args.short_seq_prob,
                 masked_lm_prob=args.masked_lm_prob, max_predictions_per_seq=args.max_predictions_per_seq,
-                whole_word_mask=args.do_whole_word_mask, vocab=vocab)
+                whole_word_mask=args.do_whole_word_mask, vocab_list=vocab_list)
             doc_instances = [json.dumps(instance) for instance in doc_instances]
             for instance in doc_instances:
                 epoch_file.write(instance + '\n')
                 num_instances += 1
-    metrics_file = args.output_dir / "bert_epoch_{}_metrics.json".format(epoch_num)
+    metrics_file = Path(f"{args.save_filename}_metrics.json")
     with metrics_file.open('w') as metrics_file:
         metrics = {
             "num_training_examples": num_instances,
             "max_seq_len": args.max_seq_len
         }
         metrics_file.write(json.dumps(metrics))
-
-
-def make_pretrain():
-    args = cfg.Config({
-        "reduce_memory": True,
-        "train_corpus": Path("data/corpus.large.txt"),
-        "output_dir": Path("data"),
-        "max_seq_len": 256,
-        "short_seq_prob": 0.1,
-        "masked_lm_prob": 0.15,
-        "max_predictions_per_seq": 20,
-        "do_whole_word_mask": False,
-        "epochs_to_generate": 10,
-    })
-
-    vocab, train_label, train_sentence1, train_sentence2, valid_label, valid_sentence1, valid_sentence2, test_label, test_sentence1, test_sentence2, max_sentence1, max_sentence2, max_sentence_all = data.load_data("data/snli_data.pkl")
-
-    with DocumentDatabase(reduce_memory=args.reduce_memory) as docs:
-        with args.train_corpus.open() as f:
-            doc = []
-            for line in tqdm(f, desc="Loading Dataset", unit=" lines"):
-                line = line.strip()
-                if line == "":
-                    if doc:
-                        docs.add_document(doc)
-                        doc = []
-                else:
-                    tokens = tokenizer.tokenize(line)
-                    if 0 < len(tokens):
-                        doc.append(tokens)
-            if doc:
-                docs.add_document(doc)  # If the last doc didn't end on a newline, make sure it still gets added
-        if len(docs) <= 1:
-            exit("ERROR: No document breaks were found in the input file! These are necessary to allow the script to "
-                 "ensure that random NextSentences are not sampled from the same document. Please add blank lines to "
-                 "indicate breaks between documents in your input file. If your dataset does not contain multiple "
-                 "documents, blank lines can be inserted at any natural boundary, such as the ends of chapters, "
-                 "sections or paragraphs.")
-
-        for epoch in trange(args.epochs_to_generate, desc="Epoch"):
-            create_training_file(docs, vocab, args, epoch)
-
-
-def make_corpus(count=1000):
-    filenames = os.listdir("/home/ubuntu/Dev/Research/Dnn/bookcorpus/out_txts")
-    with open("data/corpus.large.txt", "w") as corpus:
-        for filename in filenames:
-            with open("/home/ubuntu/Dev/Research/Dnn/bookcorpus/out_txts/" + filename, "r") as txt:
-                corpus.write(txt.read())
-                corpus.write("\n\n")
-            count -= 1
-            if count <= 0:
-                break
-
-
-def convert_tokens_to_ids(vocab, tokens):
-    ids = []
-    for token in tokens:
-        ids.append(vocab.get(token, 1)) # 1: <unk>
-    return ids
 
 
 def convert_example_to_features(example, vocab, max_seq_length):
@@ -367,8 +366,10 @@ def convert_example_to_features(example, vocab, max_seq_length):
     masked_lm_labels = example["masked_lm_labels"]
 
     assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
-    input_ids = convert_tokens_to_ids(vocab, tokens)
-    masked_label_ids = convert_tokens_to_ids(vocab, masked_lm_labels)
+    # input_ids = convert_tokens_to_ids(vocab, tokens)
+    input_ids = [vocab.piece_to_id(token) for token in tokens]
+    # masked_label_ids = convert_tokens_to_ids(vocab, masked_lm_labels)
+    masked_label_ids = [vocab.piece_to_id(token) for token in masked_lm_labels]
 
     input_array = np.zeros(max_seq_length, dtype=np.int)
     input_array[:len(input_ids)] = input_ids
@@ -388,12 +389,10 @@ def convert_example_to_features(example, vocab, max_seq_length):
 
 
 class PregeneratedDataset(torch.utils.data.Dataset):
-    def __init__(self, training_path, epoch, vocab, num_data_epochs, reduce_memory=False):
+    def __init__(self, path, vocab, reduce_memory=False):
         self.vocab = vocab
-        self.epoch = epoch
-        self.data_epoch = epoch % num_data_epochs
-        data_file = training_path / f"bert_epoch_{self.data_epoch}_data.json"
-        metrics_file = training_path / f"bert_epoch_{self.data_epoch}_metrics.json"
+        data_file = Path(f"{path}_data.json")
+        metrics_file = Path(f"{path}_metrics.json")
         assert data_file.is_file() and metrics_file.is_file()
         metrics = json.loads(metrics_file.read_text())
         num_samples = metrics['num_training_examples']
@@ -417,7 +416,7 @@ class PregeneratedDataset(torch.utils.data.Dataset):
             segment_ids = np.zeros(shape=(num_samples, seq_len), dtype=np.bool)
             lm_label_ids = np.full(shape=(num_samples, seq_len), dtype=np.int32, fill_value=-1)
             is_nexts = np.zeros(shape=(num_samples,), dtype=np.bool)
-        logging.info(f"Loading training examples for epoch {epoch}")
+        logging.info(f"Loading training examples for")
         with data_file.open() as f:
             for i, line in enumerate(tqdm(f, total=num_samples, desc="Training examples")):
                 line = line.strip()
@@ -444,69 +443,65 @@ class PregeneratedDataset(torch.utils.data.Dataset):
                 torch.tensor(self.segment_ids[item].astype(np.int64)),
                 torch.tensor(self.lm_label_ids[item].astype(np.int64)),
                 torch.tensor(self.is_nexts[item].astype(np.int64)))
+########################################################################
+# end of pregenerate_training_data.py
+########################################################################
 
 
-class BertDataSet(torch.utils.data.Dataset):
-    def __init__(self, labels, sentence1s, sentence2s, device):
-        self.i_bos = 3 # bos
-        self.i_cls = 4 # cls
-        self.i_sep = 5 # sep
-        self.i_eos = 6 # eos
-        self.labels = labels
-        self.sentence1s = sentence1s
-        self.sentence2s = sentence2s
-        self.device = device
+"""
+pretrain data create and dump
+"""
+def demp_pretrain(vocab_file, file):
+    args = cfg.Config({
+        "reduce_memory": False,
+        "train_corpus": Path("../data/corpus.book.large.txt"),
+        "output_dir": Path("data"),
+        "max_seq_len": 256,
+        "short_seq_prob": 0.1,
+        "masked_lm_prob": 0.15,
+        "max_predictions_per_seq": 20,
+        "do_whole_word_mask": True,
+        "save_filename": file,
+    })
+
+    vocab = global_data.load_vocab(vocab_file)
+
+    with DocumentDatabase(reduce_memory=args.reduce_memory) as docs:
+        with args.train_corpus.open() as f:
+            doc = []
+            for line in tqdm(f, desc="Loading Dataset", unit=" lines"):
+                line = line.strip()
+                if line == "":
+                    docs.add_document(doc)
+                    doc = []
+                else:
+                    tokens = vocab.encode_as_pieces(line.lower())
+                    doc.append(tokens)
+            if doc:
+                docs.add_document(doc)  # If the last doc didn't end on a newline, make sure it still gets added
+        if len(docs) <= 1:
+            exit("ERROR: No document breaks were found in the input file! These are necessary to allow the script to "
+                 "ensure that random NextSentences are not sampled from the same document. Please add blank lines to "
+                 "indicate breaks between documents in your input file. If your dataset does not contain multiple "
+                 "documents, blank lines can be inserted at any natural boundary, such as the ends of chapters, "
+                 "sections or paragraphs.")
     
-    def __len__(self):
-        assert len(self.sentence1s) == len(self.sentence2s)
-        return len(self.sentence1s)
-    
-    def __getitem__(self, uid):
-        label = self.labels[uid]
-        sentence1 = self.sentence1s[uid]
-        sentence2 = self.sentence2s[uid]
-        sentence = []
-        sentence.append(self.i_cls)
-        sentence.extend(sentence1)
-        sentence.append(self.i_sep)
-        sentence.extend(sentence2)
-        sentence.append(self.i_sep)
-        segment = []
-        segment.extend([0] * (len(sentence1) + 2))
-        segment.extend([1] * (len(sentence2) + 1))
-        return torch.tensor(uid).to(self.device), torch.tensor(label).to(self.device), torch.tensor(sentence).to(self.device), torch.tensor(segment).to(self.device)
+    vocab_list = []
+    for id in range(vocab.get_piece_size()):
+        if not vocab.is_unknown(id):
+            vocab_list.append(vocab.id_to_piece(id))
+    create_training_file(docs, vocab_list, args)
 
 
-def build_pretrain_loader(epoch, vocab, n_batch):
-    dataset = PregeneratedDataset(Path("data/"), epoch, vocab, 10, reduce_memory=True)
+def build_pretrain_loader(path, vocab, n_batch):
+    dataset = PregeneratedDataset(path, vocab, reduce_memory=True)
     sampler = torch.utils.data.RandomSampler(dataset)
     dataloader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=n_batch)
     return dataloader
 
 
-def build_data_loader(label, sentence1s, sentence2s, device, batch_size):
-    torch_labe = torch.tensor(label, dtype=torch.long).to(device)
-
-    dataset = BertDataSet(label, sentence1s, sentence2s, device)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    return loader
-
-
-def collate_fn(inputs):
-    uids, labels, sentences, segments = list(zip(*inputs))
-
-    sentences = torch.nn.utils.rnn.pad_sequence(sentences, batch_first=True, padding_value=0)
-    segments = torch.nn.utils.rnn.pad_sequence(segments, batch_first=True, padding_value=0)
-
-    batch = [
-        torch.stack(uids, dim=0),
-        torch.stack(labels, dim=0),
-        sentences,
-        segments,
-    ]
-    return batch
-
 if __name__ == '__main__':
-    # make_corpus()
-    make_pretrain()
+    prefix = 8000
+    demp_pretrain(f"../data/m_snli_{prefix}.model", f"../data/pretrain_bert_{prefix}_0")
+    pass
 
