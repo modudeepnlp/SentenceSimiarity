@@ -97,7 +97,7 @@ def collate_fn(inputs):
 """
 pretrain data create and dump
 """
-def demp_pretrain(vocab_file, flle):
+def demp_pretrain(vocab_file, file):
     in_file = f"../data/corpus.book.large.txt"
 
     vocab = global_data.load_vocab(vocab_file)

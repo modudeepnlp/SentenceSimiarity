@@ -84,7 +84,7 @@ def train_model(cuda, vocab_file, data_pkl, save_file, save_pretrain_file):
         model.load(save_file)
         print(">>>> load state dict from: ", save_file)
     elif os.path.isfile(save_pretrain_file):
-        epoch = model.decoder.load(save_pretrain_file)
+        epoch = model.bert.load(save_pretrain_file)
         print(">>>> load state dict from: ", save_pretrain_file, "epoch:", epoch)
     model.to(config.device)
 
