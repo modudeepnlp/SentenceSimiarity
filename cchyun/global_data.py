@@ -117,6 +117,7 @@ def load_snli(file):
 
 if __name__ == "__main__":
     # make_book_corpus("data/corpus.book.small.txt", 100)
+    # make_book_corpus("data/corpus.book.middle.txt", 1000)
     # make_book_corpus("data/corpus.book.large.txt", 4000)
     # make_snli_corpus(["data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt"], "data/corpus.snli.txt")
     # build_vocab("data/corpus.snli.txt", "m_snli_16000", 16000)
