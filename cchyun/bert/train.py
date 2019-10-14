@@ -73,8 +73,6 @@ def train_model(cuda, vocab_file, data_pkl, save_file, save_pretrain_file):
     # cuda or cpu
     config.device = torch.device(cuda if torch.cuda.is_available() else "cpu")
     config.n_vocab = len(vocab)
-    config.n_enc_vocab = len(vocab)
-    config.n_dec_vocab = len(vocab)
     config.i_pad = global_data.PAD_ID
     print(config)
 
@@ -101,7 +99,7 @@ def train_model(cuda, vocab_file, data_pkl, save_file, save_pretrain_file):
         {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': config.weight_decay},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
-    optimizer = optim.AdamW(optimizer_grouped_parameters, lr=config.learning_rate, eps=config.adam_epsilon)
+    optimizer = optim.RAdam(optimizer_grouped_parameters, lr=config.learning_rate, eps=config.adam_epsilon)
     scheduler = optim.WarmupLinearSchedule(optimizer, warmup_steps=config.warmup_steps, t_total=t_total)
     
     best_epoch, best_loss, best_val, best_test = None, None, None, None
