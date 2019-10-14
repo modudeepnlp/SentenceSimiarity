@@ -278,9 +278,9 @@ def _local_perm(inputs, targets, is_masked, perm_size, seq_len):
 
 
 def make_permute(in_feature, reuse_len, seq_len, perm_size, num_predict):
-    inputs = torch.LongTensor(in_feature.pop("input"))
-    target = torch.LongTensor(in_feature.pop("target"))
-    is_masked = torch.ByteTensor(in_feature.pop("is_masked"))
+    inputs = torch.LongTensor(in_feature.get("input"))
+    target = torch.LongTensor(in_feature.get("target"))
+    is_masked = torch.ByteTensor(in_feature.get("is_masked"))
     feature = dict()
 
     non_reuse_len = seq_len - reuse_len
@@ -338,7 +338,7 @@ def make_permute(in_feature, reuse_len, seq_len, perm_size, num_predict):
         feature["target"] = torch.reshape(target, [seq_len])
         feature["target_mask"] = torch.reshape(target_mask, [seq_len])
 
-    feature["seg_id"] = torch.IntTensor(in_feature["seg_id"])
+    feature["seg_id"] = torch.IntTensor(in_feature.get("seg_id"))
     feature["perm_mask"] = torch.reshape(perm_mask, [seq_len, seq_len])
     feature["input_k"] = torch.reshape(input_k, [seq_len])
     feature["input_q"] = torch.reshape(input_q, [seq_len])
