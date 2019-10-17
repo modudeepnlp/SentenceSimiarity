@@ -5,8 +5,8 @@
     "n_layer": 12,
     "d_embed": 768,
     "i_pad": 0,
-    "d_ff": 2048,
-    "n_head": 8,
+    "d_ff": 3072,
+    "n_head": 12,
     "d_head": 64,
     "dropout": 0.1,
     "layer_norm_epsilon": 1e-12,
@@ -15,6 +15,6 @@
     "learning_rate": 5e-5,
     "adam_epsilon": 1e-8,
     "warmup_steps": 0,
-    "n_batch": 128,
+    "n_batch": 96,
     "n_epoch": 50
 }

@@ -23,7 +23,6 @@ def eval_epoch(config, epoch, model, data_loader, mode):
     with tqdm(total=len(data_loader), desc=f"{mode}") as pbar:
         for i, value in enumerate(data_loader):
             snli_label, sentences, segment = map(lambda v: v.to(config.device), value)
-            lm_label = sentences[:, 1:].contiguous()
 
             ogit = model(sentences, segment)
             _, indices = ogit.max(1)
