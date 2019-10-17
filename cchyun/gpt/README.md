@@ -6,3 +6,5 @@
 - pretrain 00: epcoh: 49, loss: 0.365, val: 84.495, test: 84.212
 - pretrain 03: epoch: 46, loss: 0.366, val: 86.243, test: 86.268
 
+### vocab 8000, layer 12, embd 768
+- pretrain 00: epoch: 19, loss: 0.321, val: 80.248, test: 80.10

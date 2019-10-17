@@ -55,11 +55,11 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.config = config
 
-        self.W_Q = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
-        self.W_K = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
-        self.W_V = nn.Linear(self.config.d_embed, self.config.d_head * self.config.n_head)
+        self.W_Q = nn.Linear(self.config.d_embd, self.config.d_head * self.config.n_head)
+        self.W_K = nn.Linear(self.config.d_embd, self.config.d_head * self.config.n_head)
+        self.W_V = nn.Linear(self.config.d_embd, self.config.d_head * self.config.n_head)
         self.scaled_dot_attn = ScaledDotProductAttention(self.config)
-        self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_embed)
+        self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_embd)
 
         self.dropout = nn.Dropout(config.dropout)
     
@@ -83,7 +83,7 @@ class MultiHeadAttention(nn.Module):
         # (bs, n_head, n_q_seq, e_embd)
         output = self.linear(context)
         output = self.dropout(output)
-        # (bs, n_q_seq, d_embed), (bs, n_head, n_q_seq, n_k_seq)
+        # (bs, n_q_seq, d_embd), (bs, n_head, n_q_seq, n_k_seq)
         return output, attn
 
 
@@ -92,8 +92,8 @@ class PoswiseFeedForwardNet(nn.Module):
         super().__init__()
         self.config = config
 
-        self.conv1 = nn.Conv1d(in_channels=self.config.d_embed, out_channels=self.config.d_ff, kernel_size=1)
-        self.conv2 = nn.Conv1d(in_channels=self.config.d_ff, out_channels=self.config.d_embed, kernel_size=1)
+        self.conv1 = nn.Conv1d(in_channels=self.config.d_embd, out_channels=self.config.d_ff, kernel_size=1)
+        self.conv2 = nn.Conv1d(in_channels=self.config.d_ff, out_channels=self.config.d_embd, kernel_size=1)
         self.activ = gelu
         self.dropout = nn.Dropout(config.dropout)
 
@@ -101,62 +101,11 @@ class PoswiseFeedForwardNet(nn.Module):
         # (bs, d_ff, n_seq)
         output = self.activ(self.conv1(inputs.transpose(1, 2)))
         # gelu ??
-        # (bs, n_seq, d_embed)
+        # (bs, n_seq, d_embd)
         output = self.conv2(output).transpose(1, 2)
         output = self.dropout(output)
-        # (bs, n_seq, d_embed)
+        # (bs, n_seq, d_embd)
         return output
-
-
-class EncoderLayer(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-
-        self.enc_self_attn = MultiHeadAttention(self.config)
-        # GPT2: layer normal (위치변경)
-        self.layer_norm1 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
-        self.pos_ffn = PoswiseFeedForwardNet(self.config)
-        # GPT2: layer normal (위치변경)
-        self.layer_norm2 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
-    
-    def forward(self, enc_inputs, enc_self_attn_mask):
-        # (bs, n_enc_seq, d_embed), (bs, n_head, n_enc_seq, n_enc_seq)
-        att_outputs, attn = self.enc_self_attn(enc_inputs, enc_inputs, enc_inputs, enc_self_attn_mask)
-        att_outputs = self.layer_norm1(enc_inputs + att_outputs)
-        ffn_outputs = self.pos_ffn(att_outputs)
-        ffn_outputs = self.layer_norm2(ffn_outputs + att_outputs)
-        # (bs, n_enc_seq, d_embed), (bs, n_head, n_enc_seq, n_enc_seq)
-        return enc_outputs, attn
-
-
-class Encoder(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-
-        self.enc_emb = nn.Embedding(self.config.n_enc_vocab, self.config.d_embed)
-        self.pos_emb = nn.Embedding(self.config.n_enc_seq + 1, self.config.d_embed)
-
-        self.layers = nn.ModuleList([EncoderLayer(self.config) for _ in range(self.config.n_layer)])
-    
-    def forward(self, enc_inputs):
-        positions = torch.arange(enc_inputs.size(1), device=enc_inputs.device, dtype=enc_inputs.dtype).expand(enc_inputs.size(0), enc_inputs.size(1)) + 1
-        pos_mask = enc_inputs.eq(self.config.i_pad)
-        positions.masked_fill_(pos_mask, 0)
-        # (bs, n_enc_seq, d_embed)
-        enc_outputs = self.enc_emb(enc_inputs) + self.pos_emb(positions)
-
-        # (bs, n_enc_seq, n_enc_seq)
-        enc_self_attn_mask = get_attn_pad_mask(enc_inputs, enc_inputs, self.config.i_pad)
-
-        enc_self_attns = []
-        for layer in self.layers:
-            # (bs, n_enc_seq, d_embed), (bs, n_head, n_enc_seq, n_enc_seq)
-            enc_outputs, enc_self_attn = layer(enc_outputs, enc_self_attn_mask)
-            enc_self_attns.append(enc_self_attn)
-        # (bs, n_enc_seq, d_embed), [(bs, n_head, n_enc_seq, n_enc_seq)]
-        return enc_outputs, enc_self_attns
 
 
 class DecoderLayer(nn.Module):
@@ -166,18 +115,18 @@ class DecoderLayer(nn.Module):
 
         self.dec_self_attn = MultiHeadAttention(self.config)
         # GPT2: layer normal (위치변경)
-        self.layer_norm1 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
+        self.layer_norm1 = nn.LayerNorm(self.config.d_embd, eps=self.config.layer_norm_epsilon)
         self.pos_ffn = PoswiseFeedForwardNet(self.config)
         # GPT2: layer normal (위치변경)
-        self.layer_norm2 = nn.LayerNorm(self.config.d_embed, eps=self.config.layer_norm_epsilon)
+        self.layer_norm2 = nn.LayerNorm(self.config.d_embd, eps=self.config.layer_norm_epsilon)
     
     def forward(self, dec_inputs, dec_self_attn_mask):
-        # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
+        # (bs, n_seq, d_embd), (bs, n_head, n_seq, n_seq)
         att_outputs, dec_self_attn = self.dec_self_attn(dec_inputs, dec_inputs, dec_inputs, dec_self_attn_mask)
         att_outputs = self.layer_norm1(dec_inputs + att_outputs)
         ffn_outputs = self.pos_ffn(att_outputs)
         ffn_outputs = self.layer_norm2(ffn_outputs + att_outputs)
-        # (bs, n_dec_seq, d_embed), (bs, n_head, n_dec_seq, n_dec_seq)
+        # (bs, n_seq, d_embd), (bs, n_head, n_seq, n_seq)
         return ffn_outputs, dec_self_attn
 
 
@@ -186,36 +135,36 @@ class Decoder(nn.Module):
         super().__init__()
         self.config = config
 
-        self.dec_emb = nn.Embedding(self.config.n_dec_vocab, self.config.d_embed)
-        self.pos_emb = nn.Embedding(self.config.n_dec_seq + 1, self.config.d_embed)
+        self.dec_emb = nn.Embedding(self.config.n_vocab, self.config.d_embd)
+        self.pos_emb = nn.Embedding(self.config.n_seq + 1, self.config.d_embd)
 
         self.layers = nn.ModuleList([DecoderLayer(self.config) for _ in range(self.config.n_layer)])
 
         # GPT2: layer normal 추가
-        self.layer_norm = nn.LayerNorm(config.d_embed, eps=config.layer_norm_epsilon)
+        self.layer_norm = nn.LayerNorm(config.d_embd, eps=config.layer_norm_epsilon)
     
     def forward(self, dec_inputs):
         positions = torch.arange(dec_inputs.size(1), device=dec_inputs.device, dtype=dec_inputs.dtype).expand(dec_inputs.size(0), dec_inputs.size(1)) + 1
         pos_mask = dec_inputs.eq(self.config.i_pad)
         positions.masked_fill_(pos_mask, 0)
-        # (bs, n_dec_seq, d_embed)
+        # (bs, n_seq, d_embd)
         dec_outputs = self.dec_emb(dec_inputs) + self.pos_emb(positions)
 
-        # (bs, n_dec_seq, n_dec_seq)
+        # (bs, n_seq, n_seq)
         dec_attn_pad_mask = get_attn_pad_mask(dec_inputs, dec_inputs, self.config.i_pad)
-        # (bs, n_dec_seq, n_dec_seq)
+        # (bs, n_seq, n_seq)
         dec_attn_subsequent_mask = get_attn_subsequent_mask(dec_inputs)
-        # (bs, n_dec_seq, n_dec_seq)
+        # (bs, n_seq, n_seq)
         dec_self_attn_mask = torch.gt((dec_attn_pad_mask + dec_attn_subsequent_mask), 0)
 
         dec_self_attns = []
         # GPT2: layer normal 추가
         # dec_outputs = self.layer_norm(dec_outputs)
         for layer in self.layers:
-            # (bs, n_dec_seq, d_embed), (bs, n_dec_seq, n_dec_seq)
+            # (bs, n_seq, d_embd), (bs, n_seq, n_seq)
             dec_outputs, dec_self_attn = layer(dec_outputs, dec_self_attn_mask)
             dec_self_attns.append(dec_self_attn)
-        # (bs, n_dec_seq, d_embed), [(bs, n_dec_seq, n_dec_seq)]
+        # (bs, n_seq, d_embd), [(bs, n_seq, n_seq)]
         return dec_outputs, dec_self_attns
     
     def save(self, epoch, path):
@@ -237,16 +186,16 @@ class GPTPretrain(nn.Module):
 
         self.decoder = Decoder(self.config)
 
-        self.projection_lm = nn.Linear(self.config.d_embed, self.config.n_dec_vocab, bias=False)
+        self.projection_lm = nn.Linear(self.config.d_embd, self.config.n_vocab, bias=False)
         # tie_weights
         self.projection_lm.weight = self.decoder.dec_emb.weight
 
-        self.projection_ns = nn.Linear(config.d_embed, 2)
+        self.projection_ns = nn.Linear(config.d_embd, 2)
 
         self.dropout = nn.Dropout(config.dropout)
      
     def forward(self, sentences):
-        # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
+        # (bs, n_seq, d_embd) -> (bs, n_seq * d_embd)
         sentence_ctx, _ = self.decoder(sentences)
         
         logit = self.projection_lm(sentence_ctx)
@@ -261,16 +210,16 @@ class SNLI(nn.Module):
 
         self.decoder = Decoder(self.config)
 
-        self.projection_lm = nn.Linear(self.config.d_embed, self.config.n_dec_vocab, bias=False)
+        self.projection_lm = nn.Linear(self.config.d_embd, self.config.n_vocab, bias=False)
         # tie_weights
         self.projection_lm.weight = self.decoder.dec_emb.weight
 
-        self.projection_snli = nn.Linear(config.d_embed, config.n_output)
+        self.projection_snli = nn.Linear(config.d_embd, config.n_output)
 
         self.dropout = nn.Dropout(config.dropout)
      
     def forward(self, sentences):
-        # (bs, n_dec_seq, d_embed) -> (bs, n_dec_seq * d_embed)
+        # (bs, n_seq, d_embd) -> (bs, n_seq * d_embd)
         sentence_ctx, _ = self.decoder(sentences)
         
         lm_logit = self.projection_lm(sentence_ctx)
