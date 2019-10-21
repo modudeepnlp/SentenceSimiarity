@@ -34,7 +34,7 @@ class ScaledDotProductAttention(nn.Module):
         super().__init__()
         self.config = config
 
-        # self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(config.dropout)
         self.scale = 1 / (self.config.d_head ** 0.5)
     
     def forward(self, Q, K, V, attn_mask):
@@ -43,7 +43,7 @@ class ScaledDotProductAttention(nn.Module):
         scores.masked_fill_(attn_mask, -1e9)
         # (bs, n_head, n_q_seq, n_k_seq)
         attn = nn.Softmax(dim=-1)(scores)
-        # attn = self.dropout(attn)
+        attn = self.dropout(attn)
         # (bs, n_head, n_q_seq, d_head)
         context = torch.matmul(attn, V)
         # (bs, n_head, n_q_seq, d_head), (bs, n_head, n_q_seq, n_v_seq)
@@ -60,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         self.W_V = nn.Linear(self.config.d_hidn, self.config.d_head * self.config.n_head)
         self.scaled_dot_attn = ScaledDotProductAttention(self.config)
         self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_hidn)
-        # self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(config.dropout)
     
     def forward(self, Q, K, V, attn_mask):
         batch_size = Q.size(0)
@@ -81,7 +81,7 @@ class MultiHeadAttention(nn.Module):
         context = context.transpose(1, 2).contiguous().view(batch_size, -1, self.config.n_head * self.config.d_head)
         # (bs, n_head, n_q_seq, e_embd)
         output = self.linear(context)
-        # output = self.dropout(output)
+        output = self.dropout(output)
         # (bs, n_q_seq, d_hidn), (bs, n_head, n_q_seq, n_k_seq)
         return output, attn
 
@@ -94,14 +94,14 @@ class PoswiseFeedForwardNet(nn.Module):
         self.conv1 = nn.Conv1d(in_channels=self.config.d_hidn, out_channels=self.config.d_ff, kernel_size=1)
         self.conv2 = nn.Conv1d(in_channels=self.config.d_ff, out_channels=self.config.d_hidn, kernel_size=1)
         self.activ = gelu
-        # self.dropout = nn.Dropout(config.dropout)
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, inputs):
         # (bs, d_ff, n_seq)
         output = self.activ(self.conv1(inputs.transpose(1, 2)))
         # (bs, n_seq, d_embd)
         output = self.conv2(output).transpose(1, 2)
-        # output = self.dropout(output)
+        output = self.dropout(output)
         # (bs, n_seq, d_embd)
         return output
 
@@ -163,7 +163,7 @@ class Encoder(nn.Module):
         return outputs, attn_probs
 
 
-class BertModel(nn.Module):
+class AlBertModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -188,19 +188,22 @@ class BertModel(nn.Module):
         return save["epoch"]
 
 
-class BertPretrain(nn.Module):
+class AlBertPretrain(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.bert = BertModel(config)
-        self.mlm_prediction = nn.Linear(config.d_hidn, config.n_output)
+        self.bert = AlBertModel(config)
+        self.o_fecto = nn.Linear(config.d_hidn, config.d_embd)
+        self.mlm_prediction = nn.Linear(config.d_embd, config.n_vocab)
         self.mlm_prediction.weight = self.bert.encoder.wrd_emb.weight
-        self.nsp_prediction = nn.Linear(config.d_hidn, config.n_vocab)
+        self.nsp_prediction = nn.Linear(config.d_hidn, 2)
     
     def forward(self, input_ids, token_type_ids):
         outputs, pooled_output, attn_probs = self.bert(input_ids, token_type_ids)
 
-        prediction_scores, seq_relationship_score = self.cls(outputs, pooled_output)
+        outputs = self.o_fecto(outputs)
+        prediction_scores = self.mlm_prediction(outputs)
+        seq_relationship_score = self.nsp_prediction(pooled_output)
  
         return prediction_scores, seq_relationship_score, attn_probs
 
@@ -231,6 +234,4 @@ class SNLI(nn.Module):
     def load(self, path):
         save = torch.load(path)
         self.load_state_dict(save["state_dict"])
-
-
 

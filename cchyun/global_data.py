@@ -24,17 +24,23 @@ label_dict = { "neutral": 0, "entailment": 1, "contradiction": 2 }
 """
 학습 corpus 생성
 """
-def make_book_corpus(output, count=None):
+def make_book_corpus(output, offset=0, count=None):
     filenames = os.listdir("/home/ubuntu/Dev/Research/Dnn/bookcorpus/out_txts")
+    n_book = 0
     with open(output, "w") as corpus:
         for filename in filenames:
+            if 0 < offset:
+                offset -= 1
+                continue
             with open("/home/ubuntu/Dev/Research/Dnn/bookcorpus/out_txts/" + filename, "r") as txt:
                 corpus.write(txt.read())
                 corpus.write("\n\n")
+                n_book += 1
             if count is not None:
                 count -= 1
                 if count <= 0:
                     break
+    print(f">>>> read {n_book}")
 
 
 """
@@ -118,7 +124,10 @@ def load_snli(file):
 if __name__ == "__main__":
     # make_book_corpus("data/corpus.book.small.txt", 100)
     # make_book_corpus("data/corpus.book.middle.txt", 1000)
-    # make_book_corpus("data/corpus.book.large.txt", 4000)
+    make_book_corpus("data/corpus.book.large.00.txt", 0, 4000)
+    make_book_corpus("data/corpus.book.large.01.txt", 4000, 4000)
+    make_book_corpus("data/corpus.book.large.02.txt", 8000, 4000)
+    make_book_corpus("data/corpus.book.large.03.txt", 12000, 4000)
     # make_snli_corpus(["data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt"], "data/corpus.snli.txt")
     # build_vocab("data/corpus.snli.txt", "m_snli_16000", 16000)
     # dump_snli("data/snli_1.0/snli_1.0_train.txt", "data/snli_1.0/snli_1.0_dev.txt", "data/snli_1.0/snli_1.0_test.txt", "data/m_snli_16000.model", "data/snli_16000_data.pkl")
